@@ -1,0 +1,13 @@
+[package]
+name = "strata"
+description = "Strata file manager"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+strata-core = { path = "../strata-core" }
+gtk = { package = "gtk4", version = "0.11", features = ["v4_14"] }
+adw = { package = "libadwaita", version = "0.9", features = ["v1_6"] }
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+async-channel = "2.5.0"
