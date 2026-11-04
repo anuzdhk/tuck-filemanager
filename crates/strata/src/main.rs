@@ -3,6 +3,11 @@
 
 mod breadcrumb;
 mod debug;
+mod dialogs;
+mod jobs;
+mod menus;
+mod ops_ui;
+mod properties;
 mod info;
 mod item;
 mod pane;
@@ -53,10 +58,27 @@ pub const SHORTCUTS: &[(&str, &[&str], &str, &str)] = &[
     ("win.toggle-sidebar", &["F9"], "View", "Show sidebar"),
     ("win.toggle-info", &["F11"], "View", "Show information panel"),
     ("win.filter", &["<Ctrl>i"], "Selection", "Filter items"),
-    ("win.select-all", &["<Ctrl>a"], "Selection", "Select all"),
-    ("win.invert-selection", &["<Ctrl><Shift>a"], "Selection", "Invert selection"),
     ("app.shortcuts", &["<Ctrl>question", "<Ctrl>F1"], "General", "Keyboard shortcuts"),
     ("app.quit", &["<Ctrl>q"], "General", "Quit"),
+];
+
+/// Shortcuts that only apply while a file view has focus, so they never
+/// steal keys from text fields (Delete, Ctrl+C, Ctrl+A …).
+pub const VIEW_SHORTCUTS: &[(&str, &[&str], &str, &str)] = &[
+    ("win.select-all", &["<Ctrl>a"], "Selection", "Select all"),
+    ("win.invert-selection", &["<Ctrl><Shift>a"], "Selection", "Invert selection"),
+    ("win.copy", &["<Ctrl>c"], "Files", "Copy"),
+    ("win.cut", &["<Ctrl>x"], "Files", "Cut"),
+    ("win.paste", &["<Ctrl>v"], "Files", "Paste"),
+    ("win.rename", &["F2"], "Files", "Rename"),
+    ("win.duplicate", &["<Ctrl>d"], "Files", "Duplicate"),
+    ("win.trash", &["Delete", "KP_Delete"], "Files", "Move to Trash"),
+    ("win.delete", &["<Shift>Delete", "<Shift>KP_Delete"], "Files", "Delete permanently"),
+    ("win.new-folder", &["<Ctrl><Shift>n", "F10"], "Files", "New folder"),
+    ("win.properties", &["<Alt>Return", "<Alt>KP_Enter"], "Files", "Properties"),
+    ("win.copy-path", &["<Ctrl><Alt>c"], "Files", "Copy path"),
+    ("win.open-terminal", &["<Shift>F4"], "Files", "Open terminal here"),
+    ("win.undo", &["<Ctrl>z"], "Files", "Undo"),
 ];
 
 fn main() -> glib::ExitCode {
@@ -75,6 +97,11 @@ fn main() -> glib::ExitCode {
 
     app.connect_startup(|app| {
         load_css();
+        // Clean up after a crash or kill in the middle of a copy.
+        let removed = strata_core::ops::journal::recover(&strata_core::ops::journal::file());
+        if removed > 0 {
+            eprintln!("Removed {removed} unfinished partial file(s) from an earlier session.");
+        }
         for (action, accels, _, _) in SHORTCUTS {
             app.set_accels_for_action(action, accels);
         }
@@ -144,7 +171,7 @@ fn load_css() {
 fn show_shortcuts(parent: Option<&gtk::Window>) {
     let page = adw::PreferencesPage::new();
     let mut groups: Vec<(&str, adw::PreferencesGroup)> = Vec::new();
-    for (_, accels, section, label) in SHORTCUTS {
+    for (_, accels, section, label) in SHORTCUTS.iter().chain(VIEW_SHORTCUTS) {
         let group = match groups.iter().find(|(s, _)| s == section) {
             Some((_, g)) => g.clone(),
             None => {

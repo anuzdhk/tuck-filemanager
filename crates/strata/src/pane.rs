@@ -32,9 +32,12 @@ pub enum PaneEvent {
     Counts,
     Focused,
     Settings,
-    Toast(String),
     /// Middle-click or Ctrl+Enter on a folder.
     OpenInNewTab(gio::File),
+    /// Double-click / Enter on files (not folders).
+    Open(Vec<FileItem>),
+    /// Files dropped onto `target` (a folder).
+    Drop { files: Vec<gio::File>, target: gio::File, action: gdk::DragAction },
 }
 
 type Listener = Rc<dyn Fn(&Pane, PaneEvent)>;
@@ -72,6 +75,11 @@ pub struct Inner {
     /// Name to select once the folder has loaded (after going up).
     select_after_load: RefCell<Option<String>>,
     syncing_sort: Cell<bool>,
+    /// Names to select as soon as they appear (after paste, new folder, …).
+    pending_select: RefCell<std::collections::HashSet<std::ffi::OsString>>,
+    menu: RefCell<Option<gtk::PopoverMenu>>,
+    drop_hover: RefCell<Option<gtk::Widget>>,
+    drop_action: Cell<gdk::DragAction>,
 }
 
 #[derive(Clone)]
@@ -287,6 +295,10 @@ impl Pane {
             listener: RefCell::new(None),
             select_after_load: RefCell::new(None),
             syncing_sort: Cell::new(false),
+            pending_select: RefCell::new(Default::default()),
+            menu: RefCell::new(None),
+            drop_hover: RefCell::new(None),
+            drop_action: Cell::new(gdk::DragAction::empty()),
         }));
         pane.build_factories();
         pane.build_columns();
@@ -448,6 +460,7 @@ impl Pane {
         let v = self.0.folder_views.borrow().get(&key);
         self.apply_settings(v, false);
 
+        self.0.pending_select.borrow_mut().clear();
         // A fresh store: emptying a 100k-item one costs as much as filling it.
         self.replace_store(gio::ListStore::new::<FileItem>());
         self.0.loading.set(true);
@@ -484,6 +497,7 @@ impl Pane {
             pane.show_view();
             pane.update_subtitle();
             pane.select_pending();
+            pane.apply_pending_selection();
             pane.emit(PaneEvent::Location);
         });
         *self.0.load_task.borrow_mut() = Some(task);
@@ -681,7 +695,7 @@ impl Pane {
 
     fn remove(&self, file: &gio::File) {
         if let Some(pos) = self.position_of(file) {
-            self.store().remove(pos);
+            self.with_focus_guard(|| self.store().remove(pos));
         }
     }
 
@@ -700,9 +714,10 @@ impl Pane {
             let Ok(info) = info else { return };
             let item = FileItem::from_info(file.clone(), info);
             match pane.position_of(&file) {
-                Some(pos) => pane.store().splice(pos, 1, &[item]),
+                Some(pos) => pane.with_focus_guard(|| pane.store().splice(pos, 1, &[item])),
                 None => pane.store().append(&item),
             }
+            pane.apply_pending_selection();
         });
     }
 
@@ -903,6 +918,29 @@ impl Pane {
             view.add_controller(scroll);
         }
 
+        // Right-click menus.
+        let rclick = gtk::GestureClick::builder().button(gdk::BUTTON_SECONDARY).build();
+        let weak = self.downgrade();
+        rclick.connect_pressed(move |g, _, x, y| {
+            let Some(p) = Pane::from_weak(&weak) else { return };
+            // Only inside the file area, not the heading.
+            let in_view = p.0.root.pick(x, y, gtk::PickFlags::DEFAULT).is_some_and(|w| w.is_ancestor(&p.0.stack) || w == p.0.stack.clone().upcast::<gtk::Widget>());
+            if !in_view {
+                return;
+            }
+            g.set_state(gtk::EventSequenceState::Claimed);
+            let item = item_at(p.0.root.upcast_ref(), x, y).map(|(i, _)| i);
+            p.show_context_menu(x, y, item);
+        });
+        self.0.root.add_controller(rclick);
+        for view in [
+            self.0.icons.clone().upcast::<gtk::Widget>(),
+            self.0.compact.clone().upcast(),
+            self.0.details.clone().upcast(),
+        ] {
+            self.setup_drop_target(&view);
+        }
+
         // Pane becomes active on focus or click.
         let focus = gtk::EventControllerFocus::new();
         let weak = self.downgrade();
@@ -954,18 +992,282 @@ impl Pane {
 
     fn item_under_pointer(&self, g: &gtk::GestureClick) -> Option<FileItem> {
         let (x, y) = g.point(None)?;
-        let mut w = self.0.root.pick(x, y, gtk::PickFlags::DEFAULT)?;
-        loop {
-            if let Some(item) = unsafe { w.data::<glib::WeakRef<FileItem>>("strata-item") } {
-                // SAFETY: only ever set to this type in bind_item.
-                return unsafe { item.as_ref() }.upgrade();
-            }
-            w = w.parent()?;
+        item_at(self.0.root.upcast_ref(), x, y).map(|(i, _)| i)
+    }
+
+    // ------------------------------------------------------- selection API
+
+    fn current_sel(&self) -> &gtk::MultiSelection {
+        if self.settings().mode == ViewMode::Details { self.details_sel() } else { &self.0.flat_sel }
+    }
+
+    fn position_in_view(&self, item: &FileItem) -> Option<u32> {
+        let sel = self.current_sel();
+        (0..sel.n_items()).find(|&i| sel.item(i).and_then(|o| unwrap_item(&o)).as_ref() == Some(item))
+    }
+
+    fn is_selected(&self, item: &FileItem) -> bool {
+        self.position_in_view(item).is_some_and(|p| self.current_sel().is_selected(p))
+    }
+
+    /// Select only `item` (used when right-clicking or dragging an
+    /// unselected item).
+    fn select_only(&self, item: &FileItem) {
+        if let Some(p) = self.position_in_view(item) {
+            self.current_sel().select_item(p, true);
         }
+    }
+
+    /// Select these on-disk names in the current folder, now or as soon as
+    /// they appear. Replaces the current selection.
+    pub fn select_names(&self, names: Vec<std::ffi::OsString>) {
+        if names.is_empty() {
+            return;
+        }
+        self.current_sel().unselect_all();
+        *self.0.pending_select.borrow_mut() = names.into_iter().collect();
+        self.apply_pending_selection();
+    }
+
+    fn apply_pending_selection(&self) {
+        if self.0.pending_select.borrow().is_empty() {
+            return;
+        }
+        let sel = self.current_sel().clone();
+        let mut first = None;
+        for i in 0..sel.n_items() {
+            let Some(item) = sel.item(i).and_then(|o| unwrap_item(&o)) else { continue };
+            if self.0.pending_select.borrow_mut().remove(&item.raw_name()) {
+                sel.select_item(i, false);
+                first.get_or_insert(i);
+            }
+        }
+        if let Some(i) = first {
+            let flags = gtk::ListScrollFlags::FOCUS;
+            match self.settings().mode {
+                ViewMode::Icons => self.0.icons.scroll_to(i, flags, None),
+                ViewMode::Compact => self.0.compact.scroll_to(i, flags, None),
+                ViewMode::Details => self.0.details.scroll_to(i, None::<&gtk::ColumnViewColumn>, flags, None),
+            }
+        }
+    }
+
+    /// Is the current folder somewhere we can create files?
+    pub fn is_writable(&self) -> bool {
+        let loc = self.location();
+        if loc.uri_scheme().as_deref() == Some("trash") {
+            return false;
+        }
+        match loc.path() {
+            Some(p) => {
+                use std::os::unix::ffi::OsStrExt;
+                let c = std::ffi::CString::new(p.as_os_str().as_bytes()).unwrap_or_default();
+                // SAFETY: NUL-terminated path.
+                unsafe { libc::access(c.as_ptr(), libc::W_OK) == 0 }
+            }
+            None => true,
+        }
+    }
+
+    pub fn in_trash(&self) -> bool {
+        self.location().uri_scheme().as_deref() == Some("trash")
+    }
+
+    // -------------------------------------------------------- context menu
+
+    pub(crate) fn show_context_menu(&self, x: f64, y: f64, on_item: Option<FileItem>) {
+        let menu = match &on_item {
+            Some(item) => {
+                if !self.is_selected(item) {
+                    self.select_only(item);
+                }
+                let sel = self.selected_items();
+                crate::menus::item_menu(&crate::menus::Selection {
+                    count: sel.len(),
+                    has_dir: sel.iter().any(|i| i.is_dir()),
+                    has_file: sel.iter().any(|i| !i.is_dir()),
+                    in_trash: self.in_trash(),
+                })
+            }
+            None => {
+                self.current_sel().unselect_all();
+                crate::menus::background_menu(self.in_trash(), self.is_writable())
+            }
+        };
+        if let Some(old) = self.0.menu.borrow_mut().take() {
+            old.unparent();
+        }
+        let pop = gtk::PopoverMenu::from_model(Some(&menu));
+        pop.set_parent(&self.0.root);
+        pop.set_has_arrow(false);
+        pop.set_halign(gtk::Align::Start);
+        pop.set_pointing_to(Some(&gdk::Rectangle::new(x as i32, y as i32, 1, 1)));
+        let weak = self.downgrade();
+        pop.connect_closed(move |p| {
+            let p = p.clone();
+            let weak = weak.clone();
+            // Unparent after the menu action has run.
+            glib::idle_add_local_once(move || {
+                if let Some(pane) = Pane::from_weak(&weak) {
+                    let mut m = pane.0.menu.borrow_mut();
+                    if m.as_ref() == Some(&p) {
+                        *m = None;
+                    }
+                }
+                if p.parent().is_some() {
+                    p.unparent();
+                }
+            });
+        });
+        pop.popup();
+        *self.0.menu.borrow_mut() = Some(pop);
+    }
+
+    /// The open context menu, if any (test hooks capture it).
+    pub fn open_menu(&self) -> Option<gtk::PopoverMenu> {
+        self.0.menu.borrow().clone().filter(|m| m.is_visible())
+    }
+
+    /// Context menu for the selection, opened from the keyboard.
+    pub fn keyboard_menu(&self) {
+        let sel = self.selected_items();
+        let (w, h) = (self.0.root.width() as f64, self.0.root.height() as f64);
+        self.show_context_menu(w / 3.0, h / 3.0, sel.first().cloned());
+    }
+
+    // ------------------------------------------------------- drag and drop
+
+    fn setup_drag_source(&self, cell: &gtk::Widget) {
+        let src = gtk::DragSource::builder().actions(gdk::DragAction::COPY | gdk::DragAction::MOVE | gdk::DragAction::LINK).build();
+        let weak = self.downgrade();
+        let cell_weak = cell.downgrade();
+        src.connect_prepare(move |src, _, _| {
+            let pane = Pane::from_weak(&weak)?;
+            let cell = cell_weak.upgrade()?;
+            // SAFETY: only ever set to WeakRef<FileItem> in bind_item.
+            let item = unsafe { cell.data::<glib::WeakRef<FileItem>>("strata-item") }
+                .and_then(|w| unsafe { w.as_ref() }.upgrade())?;
+            if pane.in_trash() {
+                return None;
+            }
+            if !pane.is_selected(&item) {
+                pane.select_only(&item);
+            }
+            let files: Vec<gio::File> = pane.selected_items().iter().map(|i| i.target()).collect();
+            let theme = gtk::IconTheme::for_display(&cell.display());
+            let icon = theme.lookup_by_gicon(&item.icon(), 48, 1, gtk::TextDirection::None, gtk::IconLookupFlags::empty());
+            src.set_icon(Some(&icon), 24, 24);
+            let list = gdk::FileList::from_array(&files);
+            Some(gdk::ContentProvider::for_value(&list.to_value()))
+        });
+        cell.add_controller(src);
+    }
+
+    fn setup_drop_target(&self, view: &gtk::Widget) {
+        let target = gtk::DropTarget::new(
+            gdk::FileList::static_type(),
+            gdk::DragAction::COPY | gdk::DragAction::MOVE | gdk::DragAction::LINK,
+        );
+        target.set_preload(true);
+        let weak = self.downgrade();
+        let v = view.downgrade();
+        target.connect_motion(move |t, x, y| {
+            let (Some(pane), Some(view)) = (Pane::from_weak(&weak), v.upgrade()) else {
+                return gdk::DragAction::empty();
+            };
+            let (dir, cell) = match item_at(&view, x, y) {
+                Some((item, cell)) if item.is_dir() => (item.target(), Some(cell)),
+                _ => (pane.location(), None),
+            };
+            pane.set_drop_hover(cell);
+            let files = t.value().and_then(|v| v.get::<gdk::FileList>().ok()).map(|l| l.files()).unwrap_or_default();
+            if files.iter().any(|f| f.equal(&dir)) || pane.in_trash() {
+                pane.0.drop_action.set(gdk::DragAction::empty());
+                return gdk::DragAction::empty();
+            }
+            let state = t.current_event_state();
+            let ctrl = state.contains(gdk::ModifierType::CONTROL_MASK);
+            let shift = state.contains(gdk::ModifierType::SHIFT_MASK);
+            let action = match (ctrl, shift) {
+                (true, true) => gdk::DragAction::LINK,
+                (true, false) => gdk::DragAction::COPY,
+                (false, true) => gdk::DragAction::MOVE,
+                _ => {
+                    // Like every file manager: move within a drive, copy across.
+                    let same = match (files.first().and_then(|f| f.path()), dir.path()) {
+                        (Some(a), Some(b)) => same_device(&a, &b),
+                        _ => false,
+                    };
+                    if same { gdk::DragAction::MOVE } else { gdk::DragAction::COPY }
+                }
+            };
+            pane.0.drop_action.set(action);
+            action
+        });
+        let weak = self.downgrade();
+        target.connect_leave(move |_| {
+            if let Some(p) = Pane::from_weak(&weak) {
+                p.set_drop_hover(None);
+            }
+        });
+        let weak = self.downgrade();
+        let v = view.downgrade();
+        target.connect_drop(move |_, value, x, y| {
+            let (Some(pane), Some(view)) = (Pane::from_weak(&weak), v.upgrade()) else { return false };
+            pane.set_drop_hover(None);
+            let Ok(list) = value.get::<gdk::FileList>() else { return false };
+            let dir = match item_at(&view, x, y) {
+                Some((item, _)) if item.is_dir() => item.target(),
+                _ => pane.location(),
+            };
+            let action = pane.0.drop_action.get();
+            let files = list.files();
+            if action.is_empty() || files.is_empty() {
+                return false;
+            }
+            // Dropping into the folder the items already live in does nothing.
+            if action == gdk::DragAction::MOVE && files.iter().all(|f| f.parent().is_some_and(|p| p.equal(&dir))) {
+                return false;
+            }
+            pane.emit(PaneEvent::Drop { files, target: dir, action });
+            true
+        });
+        view.add_controller(target);
+    }
+
+    fn set_drop_hover(&self, cell: Option<gtk::Widget>) {
+        let mut cur = self.0.drop_hover.borrow_mut();
+        if *cur == cell {
+            return;
+        }
+        if let Some(old) = cur.take() {
+            old.remove_css_class("drop-target");
+        }
+        if let Some(c) = &cell {
+            c.add_css_class("drop-target");
+        }
+        *cur = cell;
     }
 
     fn on_key(&self, key: gdk::Key, state: gdk::ModifierType) -> glib::Propagation {
         let mods = state & gtk::accelerator_get_default_mod_mask();
+        // File shortcuts live here, not on the window, so they never fire
+        // while typing in the location bar or a filter.
+        let lower = key.to_lower();
+        for (action, accels, _, _) in crate::VIEW_SHORTCUTS {
+            for accel in *accels {
+                if let Some((k, m)) = gtk::accelerator_parse(*accel)
+                    && k.to_lower() == lower && m == mods {
+                        let (name, target) = gio::Action::parse_detailed_name(action).expect("valid action");
+                        let _ = self.0.root.activate_action(&name, target.as_ref());
+                        return glib::Propagation::Stop;
+                    }
+            }
+        }
+        if key == gdk::Key::Menu || (key == gdk::Key::F10 && mods == gdk::ModifierType::SHIFT_MASK) {
+            self.keyboard_menu();
+            return glib::Propagation::Stop;
+        }
         if key == gdk::Key::BackSpace && mods.is_empty() {
             self.go_back();
             return glib::Propagation::Stop;
@@ -1044,23 +1346,7 @@ impl Pane {
             self.navigate(item.target());
             return;
         }
-        let file = item.target();
-        let window = self.0.root.root().and_downcast::<gtk::Window>();
-        let weak = self.downgrade();
-        let name = item.name();
-        let launcher = gtk::FileLauncher::new(Some(&file));
-        launcher.launch(window.as_ref(), gio::Cancellable::NONE, move |res| {
-            if let Err(e) = res {
-                if e.matches(gtk::DialogError::Dismissed) || e.matches(gtk::DialogError::Cancelled) {
-                    return;
-                }
-                if let Some(p) = Pane::from_weak(&weak) {
-                    p.emit(PaneEvent::Toast(format!(
-                        "Couldn't open “{name}”. No app is set to open this kind of file."
-                    )));
-                }
-            }
-        });
+        self.emit(PaneEvent::Open(vec![item.clone()]));
     }
 
     // ---------------------------------------------------------- factories
@@ -1094,6 +1380,9 @@ impl Pane {
 
     fn build_factories(&self) {
         let size = self.settings().icon_size() as i32;
+        let weak_icons = self.downgrade();
+        let weak_compact = self.downgrade();
+        let weak_details = self.downgrade();
 
         // Icons: large icon above a two-line name.
         let f = gtk::SignalListItemFactory::new();
@@ -1127,6 +1416,9 @@ impl Pane {
                 .build();
             tile.append(&overlay);
             tile.append(&label);
+            if let Some(p) = Pane::from_weak(&weak_icons) {
+                p.setup_drag_source(tile.upcast_ref());
+            }
             li.set_child(Some(&tile));
         });
         f.connect_bind(|_, obj| {
@@ -1162,6 +1454,9 @@ impl Pane {
             let row = gtk::Box::builder().spacing(8).css_classes(["tile", "compact-tile"]).build();
             row.append(&image);
             row.append(&label);
+            if let Some(p) = Pane::from_weak(&weak_compact) {
+                p.setup_drag_source(row.upcast_ref());
+            }
             li.set_child(Some(&row));
         });
         f.connect_bind(|_, obj| {
@@ -1179,7 +1474,7 @@ impl Pane {
 
         // Details: only the name column depends on zoom.
         if let Some(col) = self.0.details.columns().item(0).and_downcast::<gtk::ColumnViewColumn>() {
-            col.set_factory(Some(&name_column_factory(size.min(64))));
+            col.set_factory(Some(&name_column_factory(size.min(64), weak_details)));
         }
     }
 
@@ -1191,7 +1486,7 @@ impl Pane {
             .expand(true)
             .resizable(true)
             .fixed_width(220)
-            .factory(&name_column_factory(size.min(64)))
+            .factory(&name_column_factory(size.min(64), self.downgrade()))
             .sorter(&dummy_sorter())
             .build();
         let size_col = text_column("Size", "size", true, 90, |item| {
@@ -1240,6 +1535,29 @@ pub fn unwrap_item(obj: &glib::Object) -> Option<FileItem> {
     obj.downcast_ref::<FileItem>().cloned()
 }
 
+/// The item (and its cell widget) at (x, y) in `widget`'s coordinates.
+fn item_at(widget: &gtk::Widget, x: f64, y: f64) -> Option<(FileItem, gtk::Widget)> {
+    let mut w = widget.pick(x, y, gtk::PickFlags::DEFAULT)?;
+    loop {
+        // SAFETY: only ever set to WeakRef<FileItem> in bind_item.
+        if let Some(item) = unsafe { w.data::<glib::WeakRef<FileItem>>("strata-item") } {
+            return unsafe { item.as_ref() }.upgrade().map(|i| (i, w.clone()));
+        }
+        if &w == widget {
+            return None;
+        }
+        w = w.parent()?;
+    }
+}
+
+fn same_device(a: &std::path::Path, b: &std::path::Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    match (std::fs::metadata(a), std::fs::metadata(b)) {
+        (Ok(x), Ok(y)) => x.dev() == y.dev(),
+        _ => false,
+    }
+}
+
 /// Tag a cell widget with its item, for middle-click lookup.
 fn bind_item(widget: &gtk::Widget, item: &FileItem) {
     // SAFETY: the key is only ever read back as WeakRef<FileItem>.
@@ -1254,7 +1572,7 @@ fn dummy_sorter() -> gtk::CustomSorter {
     gtk::CustomSorter::new(|_, _| gtk::Ordering::Equal)
 }
 
-fn name_column_factory(size: i32) -> gtk::SignalListItemFactory {
+fn name_column_factory(size: i32, pane: Weak<Inner>) -> gtk::SignalListItemFactory {
     let f = gtk::SignalListItemFactory::new();
     f.connect_setup(move |_, obj| {
         let li = obj.downcast_ref::<gtk::ColumnViewCell>().expect("ColumnViewCell");
@@ -1267,6 +1585,9 @@ fn name_column_factory(size: i32) -> gtk::SignalListItemFactory {
         let b = gtk::Box::builder().spacing(8).build();
         b.append(&image);
         b.append(&label);
+        if let Some(p) = Pane::from_weak(&pane) {
+            p.setup_drag_source(b.upcast_ref());
+        }
         let expander = gtk::TreeExpander::builder().child(&b).indent_for_icon(true).build();
         li.set_child(Some(&expander));
     });

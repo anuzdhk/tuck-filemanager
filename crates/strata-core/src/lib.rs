@@ -8,9 +8,15 @@ pub mod entry;
 pub mod format;
 pub mod group;
 pub mod listing;
+pub mod names;
+pub mod ops;
 pub mod paths;
+pub mod perms;
 pub mod settings;
 pub mod sort;
+pub mod terminal;
+pub mod trash;
 pub mod typeahead;
+pub mod undo;
 
 pub use entry::{EntryKind, EntryMeta};

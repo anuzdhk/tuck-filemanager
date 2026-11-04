@@ -259,3 +259,24 @@ columnview.file-details > header > button {
 .info-value {
   font-size: 0.88em;
 }
+
+/* ---------------------------------------------------------- operations */
+
+.drop-target {
+  outline: 2px dashed var(--accent-color);
+  outline-offset: -2px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent-bg-color) 14%, transparent);
+}
+
+.job-list {
+  padding: 12px;
+}
+
+.job-title {
+  font-weight: 600;
+}
+
+.job-detail {
+  font-size: 0.85em;
+}

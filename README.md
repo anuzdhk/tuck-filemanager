@@ -2,7 +2,7 @@
 
 A fast, friendly file manager for Linux, written in Rust with GTK4 and libadwaita. It aims for Dolphin's feature set with a macOS Finder-like feel: double-click archive extraction, Quick Look, instant search, and app installation built in (from [Teku](https://github.com/anuzdhk/teku)).
 
-> **Status: early development (Milestone 1 of 9, browsing).** See [docs/PARITY.md](docs/PARITY.md) for exactly what works and what is partial or untested, and [docs/PLAN.md](docs/PLAN.md) for the architecture and roadmap.
+> **Status: early development (Milestones 1–2 of 9: browsing and file operations).** See [docs/PARITY.md](docs/PARITY.md) for exactly what works and what is partial or untested, and [docs/PLAN.md](docs/PLAN.md) for the architecture and roadmap.
 
 ## Build
 
@@ -37,7 +37,7 @@ cargo test --workspace             # core unit tests
 
 ## Layout
 
-- `crates/strata-core`: UI-free logic (sorting, grouping, listing, paths, settings) with its own tests.
+- `crates/strata-core`: UI-free logic (sorting, grouping, listing, file operations, freedesktop trash, undo, names, permissions, terminal detection) with its own tests.
 - `crates/strata`: the GTK application.
 - `docs/`: plan, Dolphin parity checklist, benchmarks.
 

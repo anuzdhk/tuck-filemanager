@@ -25,7 +25,8 @@ use strata_core::{EntryKind, EntryMeta};
 /// Only `fast-content-type`, guessed from the name, so files are never opened.
 pub const ATTRS: &str = "standard::name,standard::display-name,standard::type,standard::size,\
 standard::icon,standard::fast-content-type,standard::is-hidden,standard::is-backup,\
-standard::is-symlink,standard::symlink-target,standard::target-uri,time::modified,time::created";
+standard::is-symlink,standard::symlink-target,standard::target-uri,time::modified,time::created,\
+trash::orig-path,trash::deletion-date";
 
 mod imp {
     use super::*;
@@ -44,6 +45,9 @@ mod imp {
         pub created: Cell<Option<i64>>,
         pub target_uri: RefCell<Option<String>>,
         pub group: RefCell<Option<(SortKey, Group)>>,
+        /// For items listed in trash:///.
+        pub trash_orig: RefCell<Option<std::path::PathBuf>>,
+        pub trash_deleted: RefCell<Option<String>>,
     }
 
     #[glib::object_subclass]
@@ -123,6 +127,8 @@ impl FileItem {
         }
         *imp.target_uri.borrow_mut() = attr(info, "standard::target-uri").filter(|s| !s.is_empty());
         *imp.icon.borrow_mut() = info.icon();
+        *imp.trash_orig.borrow_mut() = attr_bytes_path(info, "trash::orig-path");
+        *imp.trash_deleted.borrow_mut() = attr(info, "trash::deletion-date");
         *imp.raw_name.borrow_mut() = info.name().into_os_string();
         *imp.content_type.borrow_mut() = ct;
         *imp.meta.borrow_mut() = meta;
@@ -210,6 +216,18 @@ impl FileItem {
         icon
     }
 
+    /// Original location and deletion date, for items in the trash.
+    pub fn trash_info(&self) -> Option<(std::path::PathBuf, Option<String>)> {
+        let imp = self.imp();
+        let orig = imp.trash_orig.borrow().clone()?;
+        Some((orig, imp.trash_deleted.borrow().clone()))
+    }
+
+    /// Local path of the item (following trash and mountable targets).
+    pub fn path(&self) -> Option<std::path::PathBuf> {
+        self.target().path()
+    }
+
     /// For mountables (trash, network) the item points elsewhere.
     pub fn target(&self) -> gio::File {
         match self.imp().target_uri.borrow().as_deref() {
@@ -217,6 +235,13 @@ impl FileItem {
             None => self.file(),
         }
     }
+}
+
+fn attr_bytes_path(info: &gio::FileInfo, name: &str) -> Option<std::path::PathBuf> {
+    if !info.has_attribute(name) {
+        return None;
+    }
+    info.attribute_byte_string(name).map(|s| std::path::PathBuf::from(s.as_str()))
 }
 
 fn attr(info: &gio::FileInfo, name: &str) -> Option<String> {

@@ -825,6 +825,7 @@ dependencies = [
  "chrono",
  "gtk4",
  "libadwaita",
+ "libc",
  "strata-core",
 ]
 
@@ -833,6 +834,7 @@ name = "strata-core"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "libc",
  "serde",
  "serde_json",
  "tempfile",

@@ -12,6 +12,7 @@ use strata_core::sort::SortKey;
 
 use crate::breadcrumb::Breadcrumb;
 use crate::info::InfoPanel;
+use crate::jobs::Jobs;
 use crate::pane::{Pane, PaneEvent, folder_title};
 use crate::sidebar::Sidebar;
 
@@ -61,6 +62,7 @@ pub struct Inner {
     closed: RefCell<Vec<TabState>>,
     folder_views: Rc<RefCell<FolderViews>>,
     syncing: Cell<bool>,
+    jobs: Jobs,
 }
 
 #[derive(Clone)]
@@ -149,6 +151,7 @@ impl Window {
             .build();
         menu.update_property(&[gtk::accessible::Property::Label("Main Menu")]);
 
+        let jobs = Jobs::new();
         let header = adw::HeaderBar::builder().title_widget(&breadcrumb.widget()).build();
         header.pack_start(&sidebar_toggle);
         header.pack_start(&nav);
@@ -156,10 +159,15 @@ impl Window {
         header.pack_end(&info_button);
         header.pack_end(&split_button);
         header.pack_end(&views_box);
+        header.pack_end(&jobs.widget());
 
         // ---- tabs + info
         let tab_view = adw::TabView::new();
         let tab_bar = adw::TabBar::builder().view(&tab_view).autohide(true).build();
+        tab_bar.setup_extra_drop_target(
+            gdk::DragAction::COPY | gdk::DragAction::MOVE,
+            &[gdk::FileList::static_type()],
+        );
         let new_tab = icon_button("tab-new-symbolic", "New Tab (Ctrl+T)", "win.new-tab");
         new_tab.add_css_class("flat");
         tab_bar.set_end_action_widget(Some(&new_tab));
@@ -198,6 +206,7 @@ impl Window {
             .build();
 
         let toasts = adw::ToastOverlay::new();
+        let tab_bar_for_drop = tab_bar.clone();
         toasts.set_child(Some(&outer));
         window.set_content(Some(&toasts));
 
@@ -238,19 +247,56 @@ impl Window {
             closed: RefCell::new(Vec::new()),
             folder_views,
             syncing: Cell::new(false),
+            jobs,
         }));
+        // Dropping files on a tab puts them in that tab's folder.
+        let weak = win.downgrade();
+        tab_bar_for_drop.connect_extra_drag_drop(move |bar, page, value| {
+            let Some(w) = Window::from_weak(&weak) else { return false };
+            let Ok(list) = value.get::<gdk::FileList>() else { return false };
+            let Some(tab) = w.0.tabs.borrow().iter().find(|t| &t.page == page).cloned() else { return false };
+            let action = bar.extra_drag_preferred_action();
+            let action = if action.is_empty() { gdk::DragAction::COPY } else { action };
+            w.handle_drop(list.files(), tab.active().location(), action);
+            true
+        });
         win.setup_actions();
+        win.setup_file_actions();
         win.wire();
         WINDOWS.with(|w| w.borrow_mut().push(win.clone()));
         win
     }
 
-    fn downgrade(&self) -> Weak<Inner> {
+    pub(crate) fn downgrade(&self) -> Weak<Inner> {
         Rc::downgrade(&self.0)
     }
 
-    fn from_weak(w: &Weak<Inner>) -> Option<Window> {
+    pub(crate) fn from_weak(w: &Weak<Inner>) -> Option<Window> {
         w.upgrade().map(Window)
+    }
+
+    /// The Strata window behind a GTK window (used by test hooks).
+    pub fn find(w: &gtk::Window) -> Option<Window> {
+        WINDOWS.with(|list| list.borrow().iter().find(|x| x.0.window.upcast_ref::<gtk::Window>() == w).cloned())
+    }
+
+    pub(crate) fn gtk_window(&self) -> adw::ApplicationWindow {
+        self.0.window.clone()
+    }
+
+    pub(crate) fn jobs(&self) -> Jobs {
+        self.0.jobs.clone()
+    }
+
+    /// A toast with an Undo button.
+    pub(crate) fn toast_undo(&self, text: &str) {
+        let t = adw::Toast::builder()
+            .title(glib::markup_escape_text(text))
+            .button_label("_Undo")
+            .action_name("win.undo")
+            .timeout(6)
+            .build();
+        self.0.toasts.add_toast(t);
     }
 
     pub fn present(&self) {
@@ -415,10 +461,11 @@ impl Window {
                     self.sync_actions();
                 }
             }
-            PaneEvent::Toast(t) => self.toast(&t),
             PaneEvent::OpenInNewTab(f) => {
                 self.open_tab(f, false);
             }
+            PaneEvent::Open(items) => self.open_files(items, false),
+            PaneEvent::Drop { files, target, action } => self.handle_drop(files, target, action),
         }
     }
 
@@ -698,11 +745,29 @@ impl Window {
         self.0.window.add_controller(click);
 
         let weak = self.downgrade();
-        self.0.window.connect_close_request(move |_| {
-            if let Some(w) = Window::from_weak(&weak) {
-                w.save_session();
-                WINDOWS.with(|list| list.borrow_mut().retain(|x| !Rc::ptr_eq(&x.0, &w.0)));
+        self.0.window.connect_close_request(move |win| {
+            let Some(w) = Window::from_weak(&weak) else { return glib::Propagation::Proceed };
+            if !w.0.jobs.is_idle() {
+                // Never quit mid-operation: ask, cancel, let jobs clean up, then close.
+                let weak = w.downgrade();
+                let win = win.clone();
+                glib::MainContext::default().spawn_local(async move {
+                    let Some(w) = Window::from_weak(&weak) else { return };
+                    let ok = crate::dialogs::confirm(
+                        &win.clone().upcast(),
+                        "Stop File Operations?",
+                        "Some operations are still running. Closing the window cancels them; anything half-finished is cleaned up.",
+                        "_Stop and Close",
+                    )
+                    .await;
+                    if ok {
+                        w.0.jobs.cancel_all(move || win.close());
+                    }
+                });
+                return glib::Propagation::Stop;
             }
+            w.save_session();
+            WINDOWS.with(|list| list.borrow_mut().retain(|x| !Rc::ptr_eq(&x.0, &w.0)));
             glib::Propagation::Proceed
         });
         let _ = (&self.0.split_button, &self.0.info_button, gdk::Key::Escape);

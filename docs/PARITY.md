@@ -5,7 +5,9 @@ Reference: Dolphin (KF6) handbook. This file is updated at the end of every mile
 
 "Tested" here means exercised in the real app through its actions (scripted with `STRATA_ACTIONS`, checked in screenshots) or by unit tests. GTK4 has no public API for synthesizing key presses, so behaviour that only runs on physical key or mouse input is marked 🟡 until it's checked by hand.
 
-_Last updated: Milestone 1 (browsing)._
+_Last updated: Milestone 2 (file operations)._
+
+The test hooks can now also select items, type into dialogs, answer dialogs, open context menus and simulate drops (`select:`, `type:`, `respond:`, `menu`, `drop-copy:` …; see `crates/strata/src/debug.rs`).
 
 ## Views
 | Feature | Status | Notes |
@@ -31,12 +33,12 @@ _Last updated: Milestone 1 (browsing)._
 | Recently closed tabs | ✅ | Ctrl+Shift+T |
 | Tabs (new, close, reorder, middle-click open) | 🟡 | New, close and reopen tested; reordering is built into `AdwTabBar`. Middle-click and Ctrl+Enter "open folder in new tab" are untested. |
 | Split view (F3), focus switch | ✅ | Active pane gets an accent rule; Ctrl+F3 or Tab switches panes |
-| Drag and drop between tabs and panes | ❌ | Milestone 2 (needs file operations) |
+| Drag and drop between tabs and panes | 🟡 | Drag from any view; drop onto a folder, empty space, another pane or a tab. Move within a drive, copy across drives; Ctrl copies, Shift moves, Ctrl+Shift links. The drop pipeline is tested through a hook; real pointer drags and tab drops are untested. Dropping onto sidebar places isn't supported yet. |
 | Session restore | ✅ | Tabs, split state, active pane, window size and panel visibility |
 | Type-ahead selection | 🟡 | Matching logic unit-tested; key handling untested |
 | Filter bar (Ctrl+I) | 🟡 | Implemented, with an empty-result message; typing path untested |
 | Selection mode | ❌ | |
-| Select all / invert selection | 🟡 | Select all tested; invert implemented but untested |
+| Select all / invert selection | ✅ | Both tested. Selection shortcuts only act while a file view has focus, so Ctrl+A still works in text fields. |
 
 ## Panels
 | Feature | Status | Notes |
@@ -51,35 +53,36 @@ _Last updated: Milestone 1 (browsing)._
 ## File operations
 | Feature | Status | Notes |
 |---|---|---|
-| Copy / Cut / Paste | ❌ | Milestone 2 |
-| Move / Copy to (dialog) | ❌ | |
-| Rename (F2), inline | ❌ | |
-| Batch rename | ❌ | |
-| Duplicate (Ctrl+D) | ❌ | |
-| Move to Trash / Restore | ❌ | Trash location can already be browsed |
-| Permanent delete (Shift+Del) with confirmation | ❌ | |
-| Create symlink | ❌ | |
-| Undo / Redo (Ctrl+Z) | ❌ | |
-| Background jobs with progress and cancel | ❌ | |
-| Conflict handling: replace / skip / keep both / apply to all | ❌ | |
-| Create New: folder, file, from templates | ❌ | |
+| Copy / Cut / Paste | 🟡 | Clipboard uses GNOME (`x-special/gnome-copied-files`), KDE (`x-kde-cutselection`), `text/uri-list` and plain-text formats, so it should interoperate with Nautilus and Dolphin. The transfer behind paste is tested. Wayland only lets a focused window own the clipboard and test windows are unfocused, so Ctrl+C/Ctrl+V needs a hand test. |
+| Move / Copy to (dialog) | ❌ | Use drag and drop or cut/paste for now |
+| Rename (F2), inline | ✅ | Rename dialog, not inline: the name is selected without its extension, with live validation, a warning when the extension or visibility changes, never overwrites. Case-only renames work. |
+| Batch rename | ✅ | `###` counters or find/replace, live preview, collision check. Two-phase rename, so swaps work and a failure rolls everything back. |
+| Duplicate (Ctrl+D) | ✅ | "Report copy.pdf", "Report copy 2.pdf", for files and folders |
+| Move to Trash / Restore | ✅ | Own freedesktop Trash implementation (home trash and per-drive `.Trash-$uid`), checked against GNOME: `gio list trash:///` shows Strata-trashed items with their original path, and Restore from Strata's Trash view works. Restore never overwrites and recreates missing folders. Undo toast. Drives without a trash offer permanent deletion instead. |
+| Permanent delete (Shift+Del) with confirmation | ✅ | Confirmation names the items and says it can't be undone; Cancel is the default. Empty Trash is confirmed too. |
+| Create symlink | ✅ | "Create Link" in the menu and Ctrl+Shift drop |
+| Undo / Redo (Ctrl+Z) | 🟡 | Undo tested for move, copy, rename, trash and new items. Undo never deletes: undoing a copy moves the copy to the trash. History lasts for the session. No Redo yet. |
+| Background jobs with progress and cancel | ✅ | Jobs run on worker threads. The header shows a spinner and a popover with progress bar, bytes and items, and Cancel. Each top-level item is all-or-nothing: cancel or failure removes what it created, and a move deletes the source only after a complete copy. Files are written under a hidden temporary name and renamed into place. A free-space check runs before starting. Closing the window asks, cancels and cleans up. After a crash or `kill -9`, leftovers are swept on the next start (tested). |
+| Conflict handling: replace / skip / keep both / apply to all | ✅ | Dialog shows size and date of both versions. Folder onto folder offers Merge and asks per clashing file inside. "Apply to all" is remembered separately for files and folders. Replace swaps atomically. |
+| Create New: folder, file, from templates | 🟡 | New Folder tested. New Document (empty file, or any file in `~/Templates`) is implemented but untested. |
 
 ## Integration
 | Feature | Status | Notes |
 |---|---|---|
-| Open with default app | 🟡 | Double-click / Enter → `GtkFileLauncher` (portal-aware), with a toast on failure; untested by click |
-| Open With (and set default) | ❌ | |
-| Open in Terminal | ❌ | |
-| Copy Path / Copy Location | ❌ | |
+| Open with default app | 🟡 | Double-click / Enter → `GtkFileLauncher` (portal-aware); untested by click |
+| Open With (and set default) | 🟡 | Uses the system app chooser (portal), where the default can be set. Untested, because it opens an external dialog. |
+| Open in Terminal | ✅ | Uses `$TERMINAL`, then the desktop's own terminal (Konsole on KDE, Ptyxis/Console/GNOME Terminal on GNOME, …), then 15 known terminals, each with the right working-folder flag. Tested with a stand-in terminal (it started in the right folder). |
+| Copy Path / Copy Location | 🟡 | Implemented (Ctrl+Alt+C); the clipboard can't be checked from unfocused test windows |
+| Context menus | ✅ | Item menu (common actions at the top level), background menu (New Folder, New Document, Paste, Open in Terminal, Show Hidden, Properties) and a Trash menu (Restore, Delete Permanently, Empty Trash) |
 | Custom context-menu actions (service menus) | ❌ | |
-| Properties: permissions, ownership, size, folder size, free space | ❌ | |
+| Properties: permissions, ownership, size, folder size, free space | 🟡 | Kind, background folder size and item count, location (with "open containing folder"), dates, link target, original location for trashed items, drive free space and type. Permissions: owner, group and others access plus "allow running as a program", applied immediately; you can only change them if you own the file. Ownership is shown but can't be changed (needs administrator rights). Permission editing is untested. |
 | Network locations: SFTP, SMB, FTP, WebDAV | 🟡 | URIs typed into the location bar are listed through GVfs. Untested against real servers. No "Connect to Server" UI. |
 | Tags (xattr `user.xdg.tags`, Baloo-compatible) | ❌ | |
 | Comments (`user.xdg.comment`) and rating | ❌ | |
 | Git status indicators | ❌ | |
 | Search (names + contents, filters) | ❌ | Milestone 5 |
 | Live folder updates | ✅ | Create, delete and rename from outside the app appear immediately |
-| Keyboard-only operation | 🟡 | Every Milestone 1 action has a shortcut (see Keyboard Shortcuts, Ctrl+?), but not yet verified with keyboard only |
+| Keyboard-only operation | 🟡 | Every Milestone 1–2 action has a shortcut; the Menu key and Shift+F10 open the context menu. Not yet verified with keyboard only. |
 | Customizable shortcuts | ❌ | Shortcuts come from one table (`SHORTCUTS` in `main.rs`) but can't be edited yet |
 
 ## Beyond Dolphin (this project)
