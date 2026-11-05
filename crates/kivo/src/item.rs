@@ -48,6 +48,9 @@ mod imp {
         /// For items listed in trash:///.
         pub trash_orig: RefCell<Option<std::path::PathBuf>>,
         pub trash_deleted: RefCell<Option<String>>,
+        /// Search relevance (higher is better).
+        pub score: Cell<i32>,
+        pub in_content: Cell<bool>,
     }
 
     #[glib::object_subclass]
@@ -214,6 +217,20 @@ impl FileItem {
         };
         *imp.icon.borrow_mut() = Some(icon.clone());
         icon
+    }
+
+    pub fn score(&self) -> i32 {
+        self.imp().score.get()
+    }
+
+    /// Mark as a search result.
+    pub fn set_found(&self, score: i32, in_content: bool) {
+        self.imp().score.set(score);
+        self.imp().in_content.set(in_content);
+    }
+
+    pub fn found_in_content(&self) -> bool {
+        self.imp().in_content.get()
     }
 
     /// Original location and deletion date, for items in the trash.

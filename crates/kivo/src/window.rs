@@ -13,6 +13,7 @@ use kivo_core::sort::SortKey;
 use crate::breadcrumb::Breadcrumb;
 use crate::info::InfoPanel;
 use crate::jobs::Jobs;
+use crate::item::FileItem;
 use crate::pane::{Pane, PaneEvent, folder_title};
 use crate::sidebar::Sidebar;
 
@@ -64,6 +65,9 @@ pub struct Inner {
     syncing: Cell<bool>,
     jobs: Jobs,
     quicklook: RefCell<Option<crate::quicklook::QuickLook>>,
+    search: crate::searchbar::SearchBar,
+    search_gen: Cell<u64>,
+    search_cancel: RefCell<kivo_core::ops::Cancel>,
 }
 
 #[derive(Clone)]
@@ -184,8 +188,14 @@ impl Window {
             .build();
         info_split.add_css_class("info-split");
 
+        let search = crate::searchbar::SearchBar::new();
+        let search_button = gtk::ToggleButton::builder().icon_name("system-search-symbolic").tooltip_text("Search (Ctrl+F)").build();
+        search_button.update_property(&[gtk::accessible::Property::Label("Search")]);
+        search.revealer.bind_property("reveal-child", &search_button, "active").bidirectional().sync_create().build();
+        header.pack_end(&search_button);
         let content_tv = adw::ToolbarView::new();
         content_tv.add_top_bar(&header);
+        content_tv.add_top_bar(&search.revealer);
         content_tv.add_top_bar(&tab_bar);
         content_tv.set_content(Some(&info_split));
 
@@ -250,6 +260,9 @@ impl Window {
             syncing: Cell::new(false),
             jobs,
             quicklook: RefCell::new(None),
+            search,
+            search_gen: Cell::new(0),
+            search_cancel: RefCell::new(kivo_core::ops::Cancel::new()),
         }));
         // Dropping files on a tab puts them in that tab's folder.
         let weak = win.downgrade();
@@ -261,6 +274,29 @@ impl Window {
             let action = if action.is_empty() { gdk::DragAction::COPY } else { action };
             w.handle_drop(list.files(), tab.active().location(), action);
             true
+        });
+        let weak = win.downgrade();
+        win.0.search.connect_changed(move || {
+            if let Some(w) = Window::from_weak(&weak) {
+                w.run_search();
+            }
+        });
+        let weak = win.downgrade();
+        win.0.search.connect_stop(move || {
+            if let Some(w) = Window::from_weak(&weak) {
+                w.close_search();
+            }
+        });
+        let weak = win.downgrade();
+        win.0.search.revealer.connect_reveal_child_notify(move |r| {
+            if let Some(w) = Window::from_weak(&weak) {
+                if r.reveals_child() {
+                    w.0.search.entry.grab_focus();
+                } else if let Some(p) = w.active_pane() {
+                    p.end_search();
+                    p.focus_view();
+                }
+            }
         });
         win.setup_actions();
         win.setup_file_actions();
@@ -338,6 +374,116 @@ impl Window {
 
     pub(crate) fn quicklook_window(&self) -> Option<adw::Window> {
         self.0.quicklook.borrow().as_ref().filter(|q| q.is_visible()).map(|q| q.window())
+    }
+
+    // ------------------------------------------------------------ search
+
+    /// Type into the search field (test hooks).
+    pub(crate) fn set_search_text(&self, text: &str) {
+        self.0.search.open();
+        // "contents:" and "here:" prefixes flip the toggles (test hooks).
+        let mut t = text;
+        if let Some(rest) = t.strip_prefix("contents:") {
+            self.0.search.set_contents(true);
+            t = rest;
+        }
+        if let Some(rest) = t.strip_prefix("here:") {
+            self.0.search.set_everywhere(false);
+            t = rest;
+        }
+        self.0.search.entry.set_text(t);
+    }
+
+    fn close_search(&self) {
+        self.0.search_cancel.borrow().cancel();
+        self.0.search.close();
+    }
+
+    /// Run the search bar's query in the active pane.
+    fn run_search(&self) {
+        use crate::search_ui::{self, Found, State};
+        let Some(pane) = self.active_pane() else { return };
+        let mut q = self.0.search.query();
+        let gen_ = self.0.search_gen.get() + 1;
+        self.0.search_gen.set(gen_);
+        self.0.search_cancel.borrow().cancel();
+        let cancel = kivo_core::ops::Cancel::new();
+        *self.0.search_cancel.borrow_mut() = cancel.clone();
+        if q.is_empty() {
+            pane.end_search();
+            self.0.search.set_status("");
+            return;
+        }
+        let contents = self.0.search.contents();
+        let folder = if self.0.search.everywhere() { None } else { pane.path() };
+        if self.0.search.everywhere() && q.location.is_none() {
+            // Everywhere = the indexed home folder.
+        } else if let Some(f) = &folder {
+            q.location.get_or_insert(f.clone());
+        }
+        let (state, entries) = search_ui::state();
+        let use_index = state == State::Ready && q.location.as_ref().is_none_or(|l| search_ui::covers(l));
+        let live_root = q.location.clone().unwrap_or_else(kivo_core::paths::home);
+
+        let (tx, rx) = async_channel::unbounded::<(Vec<Found>, Option<(usize, u128, bool)>)>();
+        std::thread::spawn(move || {
+            if use_index
+                && let Some(o) = search_ui::indexed(&q, contents, 500) {
+                    let _ = tx.send_blocking((o.results, Some((o.total, o.micros, true))));
+                    return;
+                }
+            let start = std::time::Instant::now();
+            let mut count = 0usize;
+            let tx2 = tx.clone();
+            search_ui::walk(&live_root, &q, contents, &cancel, |batch| {
+                count += batch.len();
+                tx2.send_blocking((batch, None)).is_ok() && count < 5000
+            });
+            let _ = tx.send_blocking((Vec::new(), Some((count, start.elapsed().as_micros(), false))));
+        });
+
+        let weak = self.downgrade();
+        let pane_weak = pane.clone();
+        glib::MainContext::default().spawn_local(async move {
+            let mut first = true;
+            let mut shown = 0usize;
+            while let Ok((batch, done)) = rx.recv().await {
+                let Some(w) = Window::from_weak(&weak) else { return };
+                if w.0.search_gen.get() != gen_ {
+                    return; // a newer query took over
+                }
+                let items: Vec<FileItem> = batch
+                    .into_iter()
+                    .map(|f| {
+                        let item = FileItem::from_raw(&gio::File::for_path(&f.parent), f.entry);
+                        item.set_found(f.score, f.in_content);
+                        item
+                    })
+                    .collect();
+                shown += items.len();
+                let status = match done {
+                    Some((total, micros, true)) => {
+                        let more = if total > shown { format!(" (showing best {shown})") } else { String::new() };
+                        format!("{} result{}{more} · {:.1} ms", total, if total == 1 { "" } else { "s" }, micros as f64 / 1000.0)
+                    }
+                    Some((_, micros, false)) => format!("{shown} result{} · searched live in {:.1} s", if shown == 1 { "" } else { "s" }, micros as f64 / 1e6),
+                    None => format!("Searching… {shown} found"),
+                };
+                if first {
+                    pane_weak.show_results(items, &status);
+                    first = false;
+                } else {
+                    pane_weak.append_results(items, &status);
+                }
+                let bar_status = match (done.is_some(), use_index, state) {
+                    (_, true, _) => format!("Index: {entries} items"),
+                    (false, false, _) => "Searching…".into(),
+                    (true, false, State::Ready) => "Searched this folder directly (not in the index)".into(),
+                    (true, false, _) => "Index is being built; searched directly".into(),
+                };
+                w.0.search.set_status(&bar_status);
+            }
+        });
     }
 
     /// A toast with an Undo button.
@@ -652,6 +798,13 @@ impl Window {
                 }
         }));
         add("about", Box::new(|w| w.show_about()));
+        add("search", Box::new(|w| {
+            if w.0.search.is_open() && w.0.search.entry.has_focus() {
+                w.close_search();
+            } else {
+                w.0.search.open();
+            }
+        }));
         add("quick-look", Box::new(|w| {
             let first = w.active_pane().and_then(|p| p.selected_items().into_iter().next());
             if first.is_none() && !w.quick_look().is_visible() {

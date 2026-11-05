@@ -119,6 +119,12 @@ fn step_once(app: &adw::Application, s: &str) {
         }
         return;
     }
+    if let Some(text) = s.strip_prefix("search:") {
+        if let Some(w) = win.as_ref().and_then(crate::window::Window::find) {
+            w.set_search_text(text);
+        }
+        return;
+    }
     if s == "menu" {
         let w = win.as_ref().and_then(crate::window::Window::find);
         if let Some(p) = w.and_then(|w| w.active_pane()) {

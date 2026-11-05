@@ -10,6 +10,8 @@ mod ops_ui;
 mod pdf;
 mod properties;
 mod quicklook;
+mod search_ui;
+mod searchbar;
 mod thumbs_ui;
 mod info;
 mod item;
@@ -44,6 +46,7 @@ pub const SHORTCUTS: &[(&str, &[&str], &str, &str)] = &[
     ("win.up", &["<Alt>Up"], "Navigation", "Enclosing folder"),
     ("win.home", &["<Alt>Home"], "Navigation", "Home folder"),
     ("win.location", &["<Ctrl>l", "F6"], "Navigation", "Edit location"),
+    ("win.search", &["<Ctrl>f"], "Navigation", "Search"),
     ("win.reload", &["F5", "<Ctrl>r"], "Navigation", "Reload"),
     ("win.new-tab", &["<Ctrl>t"], "Tabs and Panes", "New tab"),
     ("win.close-tab", &["<Ctrl>w"], "Tabs and Panes", "Close tab"),
@@ -101,6 +104,7 @@ fn main() -> glib::ExitCode {
 
     app.connect_startup(|app| {
         load_css();
+        search_ui::start();
         // Clean up after a crash or kill in the middle of a copy.
         let removed = kivo_core::ops::journal::recover(&kivo_core::ops::journal::file());
         if removed > 0 {

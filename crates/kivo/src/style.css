@@ -299,3 +299,10 @@ image.thumbnail {
 .ql-note {
   padding: 8px 16px;
 }
+
+/* -------------------------------------------------------------- search */
+
+.search-bar {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+}

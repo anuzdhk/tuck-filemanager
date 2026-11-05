@@ -14,6 +14,7 @@ pub mod ops;
 pub mod paths;
 pub mod perms;
 pub mod preview;
+pub mod search;
 pub mod settings;
 pub mod sort;
 pub mod terminal;

@@ -29,6 +29,8 @@ fn trash() -> Trash {
 
 fn record(a: Action) {
     HISTORY.with(|h| h.borrow_mut().push(a));
+    // Keep search results fresh after changes made here.
+    crate::search_ui::nudge();
 }
 
 fn name_of(p: &Path) -> String {

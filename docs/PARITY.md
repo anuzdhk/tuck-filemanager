@@ -5,7 +5,7 @@ Reference: Dolphin (KF6) handbook. This file is updated at the end of every mile
 
 "Tested" here means exercised in the real app through its actions (scripted with `KIVO_ACTIONS`, checked in screenshots) or by unit tests. GTK4 has no public API for synthesizing key presses, so behaviour that only runs on physical key or mouse input is marked 🟡 until it's checked by hand.
 
-_Last updated: Milestone 4 (Quick Look and thumbnails)._
+_Last updated: Milestone 5 (search)._
 
 The test hooks can now also select items, type into dialogs, answer dialogs, open context menus and simulate drops (`select:`, `type:`, `respond:`, `menu`, `drop-copy:` …; see `crates/kivo/src/debug.rs`).
 
@@ -80,7 +80,10 @@ The test hooks can now also select items, type into dialogs, answer dialogs, ope
 | Tags (xattr `user.xdg.tags`, Baloo-compatible) | ❌ | |
 | Comments (`user.xdg.comment`) and rating | ❌ | |
 | Git status indicators | ❌ | |
-| Search (names + contents, filters) | ❌ | Milestone 5 |
+| Search (names + contents, filters) | ✅ | Ctrl+F or the search button. Results show in the current pane as you type, best match first: exact name, then prefix, then word start, then anywhere, adjusted for depth, recency and hidden items. Details shows a "Where" column. Filters: kind, date, size (drop-downs or typed `kind:pdf`, `modified:week`, `size:>10mb`), `tag:` (Dolphin-compatible `user.xdg.tags`), `in:` path, `hidden:yes`. Scope: This Folder or Everywhere. "Contents" also searches inside text and source files. All tested in the app. |
+| Search index | ✅ | Persistent name index of the home folder, loaded at startup in ~75 ms, then refreshed on an idle-priority thread every 5 minutes and soon after any change made in Kivo. Refreshes re-read only changed folders (0.08 s for 416k entries). Skips the contents of `.git`, `node_modules`, caches and anything with `CACHEDIR.TAG`; doesn't cross into other drives. Under 50 ms on 1M entries even on 2 threads (see `docs/BENCHMARKS.md`). |
+| Live search fallback | ✅ | Folders outside the index (other drives, system folders), or before the first index is ready, are searched by a parallel walk that streams results in batches (tested on `/usr/share/doc`: 2,810 results in 0.1 s) |
+| Content index | 🟡 | tantivy full-text index of text and source files ≤ 1 MB, incremental by modification time, deletions dropped (unit-tested). Not benchmarked on a large real home folder. PDFs and office documents aren't content-indexed yet. |
 | Live folder updates | ✅ | Create, delete and rename from outside the app appear immediately |
 | Keyboard-only operation | 🟡 | Every Milestone 1–2 action has a shortcut; the Menu key and Shift+F10 open the context menu. Not yet verified with keyboard only. |
 | Customizable shortcuts | ❌ | Shortcuts come from one table (`SHORTCUTS` in `main.rs`) but can't be edited yet |
@@ -96,7 +99,7 @@ The test hooks can now also select items, type into dialogs, answer dialogs, ope
 | Quick Look (Space) | ✅ | Space opens it, Space or Esc closes it, arrow keys move through the folder while it's open (the selection follows), Return opens. Space still types a space while you're in the middle of type-ahead. The window is reused, so it shows the item's icon at once; decoding, rendering and reading happen on worker threads, and stale results are dropped. Tested in the app with every type: PNG, a 48-megapixel JPEG, animated GIF (first frame only when animations are turned off), MP4 video and Ogg audio (via GStreamer), a multi-page PDF (Poppler, first 12 pages), Rust code (GtkSourceView syntax highlighting, light/dark scheme), Markdown (rendered natively, raw HTML shown as text), ZIP contents, folders, text with an unknown extension (detected by content), and an unknown binary (large icon and details). Header: "Open with <default app>", Open With…, and Extract for archives. |
 | Quick Look: app packages | 🟡 | Installers (.deb, .rpm, .AppImage, .flatpakref, .exe …) show a large icon and details; the Install button arrives with the Teku integration (Milestone 6) |
 | Quick Look: playback errors | 🟡 | Missing GStreamer plugins show a plain message with what to install. That path is untested, because all plugins are installed here. |
-| Indexed search < 50 ms / 1M files | ❌ | Milestone 5 |
+| Indexed search < 50 ms / 1M files | ✅ | 2–11 ms median on 20 threads; ≤ 45 ms median (49.8 ms max) on 2 threads for the worst case |
 | Teku app installation | ❌ | Milestone 6 |
 | 10 themes + accent colours + user themes | ❌ | Milestone 7. Follows the system light/dark scheme today. |
 | Icon theme: Normal / Material | ❌ | Milestone 7. Uses the system icon theme today. |

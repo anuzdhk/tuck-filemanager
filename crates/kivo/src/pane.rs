@@ -63,6 +63,8 @@ pub struct Inner {
     filter_entry: gtk::SearchEntry,
     settings: Rc<Cell<ViewSettings>>,
     filter_text: Rc<RefCell<String>>,
+    searching: Rc<Cell<bool>>,
+    search_status: RefCell<String>,
     folder_views: Rc<RefCell<FolderViews>>,
     location: RefCell<gio::File>,
     back: RefCell<Vec<gio::File>>,
@@ -89,15 +91,18 @@ impl Pane {
     pub fn new(folder_views: Rc<RefCell<FolderViews>>, location: gio::File) -> Self {
         let settings = Rc::new(Cell::new(ViewSettings::default()));
         let filter_text = Rc::new(RefCell::new(String::new()));
+        let searching = Rc::new(Cell::new(false));
 
         let store = gio::ListStore::new::<FileItem>();
 
         let filter = {
             let settings = settings.clone();
             let text = filter_text.clone();
+            let searching = searching.clone();
             gtk::CustomFilter::new(move |obj| {
                 let item = obj.downcast_ref::<FileItem>().expect("FileItem");
-                if !settings.get().show_hidden && item.is_hidden() {
+                // Search already decided about hidden items.
+                if !searching.get() && !settings.get().show_hidden && item.is_hidden() {
                     return false;
                 }
                 let t = text.borrow();
@@ -109,17 +114,23 @@ impl Pane {
 
         let sorter = {
             let settings = settings.clone();
+            let searching = searching.clone();
             gtk::CustomSorter::new(move |a, b| {
                 let a = a.downcast_ref::<FileItem>().expect("FileItem");
                 let b = b.downcast_ref::<FileItem>().expect("FileItem");
+                if searching.get() {
+                    // Search results: best match first.
+                    return b.score().cmp(&a.score()).then_with(|| compare(&a.meta(), &b.meta(), &settings.get().sort)).into();
+                }
                 compare(&a.meta(), &b.meta(), &settings.get().sort).into()
             })
         };
         let section_sorter = {
             let settings = settings.clone();
+            let searching = searching.clone();
             gtk::CustomSorter::new(move |a, b| {
                 let s = settings.get();
-                if !s.grouped {
+                if !s.grouped || searching.get() {
                     return gtk::Ordering::Equal;
                 }
                 let a = a.downcast_ref::<FileItem>().expect("FileItem");
@@ -284,6 +295,8 @@ impl Pane {
             filter_entry,
             settings,
             filter_text,
+            searching,
+            search_status: RefCell::new(String::new()),
             folder_views,
             location: RefCell::new(location.clone()),
             back: RefCell::new(Vec::new()),
@@ -454,6 +467,7 @@ impl Pane {
         }
         *self.0.monitor.borrow_mut() = None;
         *self.0.location.borrow_mut() = file.clone();
+        self.set_searching(false);
 
         // Per-folder view settings, keeping the filter bar's text.
         let key = settings_key(&file);
@@ -635,6 +649,15 @@ impl Pane {
     }
 
     fn update_subtitle(&self) {
+        if self.0.searching.get() {
+            let mut text = self.0.search_status.borrow().clone();
+            let sel = self.selected_items();
+            if !sel.is_empty() {
+                text.push_str(&format!(" · {} selected", sel.len()));
+            }
+            self.0.subtitle.set_label(&text);
+            return;
+        }
         if self.0.loading.get() && self.store().n_items() == 0 {
             self.0.subtitle.set_label("Loading…");
             return;
@@ -654,6 +677,80 @@ impl Pane {
             }
         }
         self.0.subtitle.set_label(&text);
+    }
+
+    // ------------------------------------------------------------ search
+
+    fn set_searching(&self, on: bool) {
+        if self.0.searching.replace(on) == on {
+            return;
+        }
+        // The "Where" column only makes sense for results from many folders.
+        let cols = self.0.details.columns();
+        for i in 0..cols.n_items() {
+            if let Some(c) = cols.item(i).and_downcast::<gtk::ColumnViewColumn>()
+                && c.id().as_deref() == Some("where") {
+                    c.set_visible(on);
+                }
+        }
+        self.0.filter.changed(gtk::FilterChange::Different);
+        self.0.sorter.changed(gtk::SorterChange::Different);
+        self.0.section_sorter.changed(gtk::SorterChange::Different);
+        // Results are ranked by relevance: no column shows a sort arrow.
+        if on {
+            self.0.syncing_sort.set(true);
+            self.0.details.sort_by_column(None, gtk::SortType::Ascending);
+            self.0.syncing_sort.set(false);
+        } else {
+            self.sync_column_sort();
+        }
+    }
+
+    /// Replace the view's contents with search results.
+    pub fn show_results(&self, items: Vec<FileItem>, status: &str) {
+        if let Some(task) = self.0.load_task.borrow_mut().take() {
+            task.abort();
+        }
+        *self.0.monitor.borrow_mut() = None;
+        self.0.loading.set(false);
+        self.set_searching(true);
+        *self.0.search_status.borrow_mut() = status.to_string();
+        self.0.title.set_label("Search Results");
+        let store = gio::ListStore::new::<FileItem>();
+        store.extend_from_slice(&items);
+        self.replace_store(store);
+        self.show_search_view();
+        self.update_subtitle();
+        self.emit(PaneEvent::Counts);
+    }
+
+    /// More results from a streaming (live) search.
+    pub fn append_results(&self, items: Vec<FileItem>, status: &str) {
+        if !self.0.searching.get() {
+            return;
+        }
+        *self.0.search_status.borrow_mut() = status.to_string();
+        self.store().extend_from_slice(&items);
+        self.show_search_view();
+        self.update_subtitle();
+    }
+
+    fn show_search_view(&self) {
+        if self.0.sort_model.n_items() == 0 {
+            self.0.status.set_icon_name(Some("system-search-symbolic"));
+            self.0.status.set_title("No Results");
+            self.0.status.set_description(Some("Try fewer words, check the spelling, or search everywhere instead of this folder."));
+            self.0.stack.set_visible_child_name("status");
+        } else {
+            self.0.stack.set_visible_child_name(self.settings().mode.id());
+        }
+    }
+
+    /// Leave search results and show the folder again.
+    pub fn end_search(&self) {
+        if self.0.searching.get() {
+            self.load(self.location());
+        }
     }
 
     // ------------------------------------------------------- live updates
@@ -1540,7 +1637,12 @@ impl Pane {
             format::date_relative(item.meta().modified, chrono::Local::now())
         });
         let kind = text_column("Kind", "type", false, 150, |item| item.meta().type_name.clone());
-        for c in [&name, &size_col, &modified, &kind] {
+        let home = kivo_core::paths::home();
+        let where_ = text_column("Where", "where", false, 220, move |item| {
+            item.file().parent().and_then(|p| p.path()).map(|p| kivo_core::paths::display(&p, &home)).unwrap_or_default()
+        });
+        where_.set_visible(false);
+        for c in [&name, &size_col, &modified, &kind, &where_] {
             self.0.details.append_column(c);
         }
         self.update_headers();
