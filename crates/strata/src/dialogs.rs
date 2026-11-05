@@ -278,3 +278,118 @@ pub async fn ask_batch_rename(parent: &gtk::Widget, current: Vec<String>) -> Opt
     let resp = d.choose_future(Some(parent)).await;
     if resp == "ok" { result.borrow_mut().take() } else { None }
 }
+
+/// Ask for an archive's password. `wrong` shows that the last one failed.
+pub async fn ask_password(parent: &gtk::Widget, archive: &str, wrong: bool) -> Option<String> {
+    let body = if wrong {
+        format!("That password didn't work for “{archive}”. Try again.")
+    } else {
+        format!("“{archive}” is protected. Enter its password to extract it.")
+    };
+    let d = adw::AlertDialog::new(Some("Password Required"), Some(&body));
+    let entry = gtk::PasswordEntry::builder().show_peek_icon(true).activates_default(true).build();
+    entry.update_property(&[gtk::accessible::Property::Label("Password")]);
+    if wrong {
+        entry.add_css_class("error");
+    }
+    d.set_extra_child(Some(&entry));
+    d.add_responses(&[("cancel", "_Cancel"), ("ok", "_Extract")]);
+    d.set_response_appearance("ok", adw::ResponseAppearance::Suggested);
+    d.set_default_response(Some("ok"));
+    d.set_close_response("cancel");
+    d.set_response_enabled("ok", false);
+    let dd = d.clone();
+    entry.connect_changed(move |e| dd.set_response_enabled("ok", !e.text().is_empty()));
+    let e = entry.clone();
+    glib::idle_add_local_once(move || {
+        e.grab_focus();
+    });
+    (d.choose_future(Some(parent)).await == "ok").then(|| entry.text().to_string())
+}
+
+pub struct CompressChoice {
+    pub name: String,
+    pub format: strata_core::archive::CompressFormat,
+    pub password: Option<String>,
+}
+
+/// Name, format and optional password for a new archive.
+pub async fn ask_compress(parent: &gtk::Widget, base: &str, dir: std::path::PathBuf) -> Option<CompressChoice> {
+    use strata_core::archive::CompressFormat;
+    let d = adw::AlertDialog::new(Some("Compress"), None);
+    let name = gtk::Entry::builder().text(format!("{base}.zip")).activates_default(true).build();
+    name.update_property(&[gtk::accessible::Property::Label("Archive name")]);
+    let labels: Vec<&str> = CompressFormat::ALL.iter().map(|f| f.label()).collect();
+    let fmt = gtk::DropDown::from_strings(&labels);
+    fmt.update_property(&[gtk::accessible::Property::Label("Format")]);
+    let pw = gtk::PasswordEntry::builder().show_peek_icon(true).placeholder_text("Password (optional)").build();
+    pw.update_property(&[gtk::accessible::Property::Label("Password, optional")]);
+    let note = gtk::Label::builder().xalign(0.0).wrap(true).css_classes(["caption"]).build();
+    let col = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(8).build();
+    for w in [name.upcast_ref::<gtk::Widget>(), fmt.upcast_ref(), pw.upcast_ref(), note.upcast_ref()] {
+        col.append(w);
+    }
+    d.set_extra_child(Some(&col));
+    d.add_responses(&[("cancel", "_Cancel"), ("ok", "_Compress")]);
+    d.set_response_appearance("ok", adw::ResponseAppearance::Suggested);
+    d.set_default_response(Some("ok"));
+    d.set_close_response("cancel");
+
+    let validate = {
+        let (d, name, note, dir) = (d.clone(), name.clone(), note.clone(), dir.clone());
+        move || {
+            let n = name.text().to_string();
+            let err = names::validate(&n).err();
+            let exists = dir.join(&n).exists();
+            match (&err, exists) {
+                (Some(e), _) => {
+                    note.add_css_class("error");
+                    note.set_label(e);
+                }
+                (None, true) => {
+                    note.remove_css_class("error");
+                    note.set_label("An item with this name exists; the new archive will get a number.");
+                }
+                (None, false) => {
+                    note.remove_css_class("error");
+                    note.set_label("");
+                }
+            }
+            d.set_response_enabled("ok", err.is_none());
+        }
+    };
+    validate();
+    let v = Rc::new(validate);
+    {
+        let v = v.clone();
+        name.connect_changed(move |_| v());
+    }
+    {
+        // Switching format swaps the extension and shows the password field
+        // only where encryption is supported.
+        let (name, pw) = (name.clone(), pw.clone());
+        fmt.connect_selected_notify(move |f| {
+            let new = CompressFormat::ALL[f.selected() as usize];
+            let text = name.text().to_string();
+            let stem = CompressFormat::ALL
+                .iter()
+                .find_map(|c| text.strip_suffix(c.extension()))
+                .unwrap_or(&text)
+                .to_string();
+            name.set_text(&format!("{stem}{}", new.extension()));
+            pw.set_visible(new.supports_password());
+        });
+    }
+    let n = name.clone();
+    let len = base.chars().count() as i32;
+    glib::idle_add_local_once(move || {
+        n.grab_focus();
+        n.select_region(0, len);
+    });
+    if d.choose_future(Some(parent)).await != "ok" {
+        return None;
+    }
+    let format = CompressFormat::ALL[fmt.selected() as usize];
+    let password = Some(pw.text().to_string()).filter(|p| !p.is_empty() && format.supports_password());
+    Some(CompressChoice { name: name.text().to_string(), format, password })
+}

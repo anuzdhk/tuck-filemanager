@@ -2,7 +2,7 @@
 
 A fast, friendly file manager for Linux, written in Rust with GTK4 and libadwaita. It aims for Dolphin's feature set with a macOS Finder-like feel: double-click archive extraction, Quick Look, instant search, and app installation built in (from [Teku](https://github.com/anuzdhk/teku)).
 
-> **Status: early development (Milestones 1–2 of 9: browsing and file operations).** See [docs/PARITY.md](docs/PARITY.md) for exactly what works and what is partial or untested, and [docs/PLAN.md](docs/PLAN.md) for the architecture and roadmap.
+> **Status: early development (Milestones 1–3 of 9: browsing, file operations, archives).** See [docs/PARITY.md](docs/PARITY.md) for exactly what works and what is partial or untested, and [docs/PLAN.md](docs/PLAN.md) for the architecture and roadmap.
 
 ## Build
 
@@ -50,6 +50,11 @@ STRATA_ACTIONS="win.view-mode::details;win.split" STRATA_SCREENSHOT=/tmp/shot.pn
 ```
 
 `STRATA_ACTIONS` runs window/app actions in order. `STRATA_SCREENSHOT` renders the window to PNG and then closes it (this works on both Wayland and X11). `STRATA_DEBUG_TIMING=1` prints listing timings.
+
+## Third-party notices
+
+- `crates/strata-core/tests/fixtures/tree.rar` comes from the compress-tools crate (MIT OR Apache-2.0). See `crates/strata-core/tests/fixtures/README.md`.
+- RAR extraction uses the system libarchive (BSD-2-Clause). Password-protected RAR uses the system `unrar` if present; it is not bundled.
 
 ## License
 

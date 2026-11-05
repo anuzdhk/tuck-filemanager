@@ -6,10 +6,18 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+bzip2 = "0.6.1"
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+compress-tools = "0.16.1"
+flate2 = "1.1.10"
 libc = "0.2.191"
+liblzma = "0.4.9"
 serde.workspace = true
 serde_json.workspace = true
+sevenz-rust2 = { version = "0.24.2", features = ["zstd", "deflate"] }
+tar = "0.4.46"
+zip = "9.3.0"
+zstd = "0.14.3"
 
 [dev-dependencies]
 tempfile.workspace = true

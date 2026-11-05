@@ -6,6 +6,7 @@ use strata_core::paths::{UserDir, UserDirs};
 
 pub struct Selection {
     pub count: usize,
+    pub has_archive: bool,
     pub has_dir: bool,
     pub has_file: bool,
     pub in_trash: bool,
@@ -45,6 +46,10 @@ pub fn item_menu(sel: &Selection) -> gio::Menu {
 
     let manage = gio::Menu::new();
     manage.append(Some("Re_name…"), Some("win.rename"));
+    if sel.has_archive {
+        manage.append(Some("E_xtract Here"), Some("win.extract"));
+    }
+    manage.append(Some("Co_mpress…"), Some("win.compress"));
     manage.append(Some("_Duplicate"), Some("win.duplicate"));
     manage.append(Some("Create _Link"), Some("win.link"));
     manage.append(Some("Move to T_rash"), Some("win.trash"));

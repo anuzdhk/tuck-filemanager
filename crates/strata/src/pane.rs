@@ -1084,6 +1084,7 @@ impl Pane {
                 let sel = self.selected_items();
                 crate::menus::item_menu(&crate::menus::Selection {
                     count: sel.len(),
+                    has_archive: sel.iter().any(|i| !i.is_dir() && crate::ops_ui::looks_like_archive(i)),
                     has_dir: sel.iter().any(|i| i.is_dir()),
                     has_file: sel.iter().any(|i| !i.is_dir()),
                     in_trash: self.in_trash(),

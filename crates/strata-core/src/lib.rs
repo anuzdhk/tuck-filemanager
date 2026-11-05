@@ -4,6 +4,7 @@
 //! Nothing in this crate depends on GTK. The application crate feeds it plain
 //! data and gets plain data back, which keeps all of this unit-testable.
 
+pub mod archive;
 pub mod entry;
 pub mod format;
 pub mod group;

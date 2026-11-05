@@ -100,6 +100,14 @@ impl Window {
         });
         add("folder-properties", |w| w.folder_properties());
         add("undo", |w| w.op_undo());
+        add("extract", |w| {
+            for i in w.selection() {
+                if let (Some(p), true) = (i.path(), looks_like_archive(&i)) {
+                    w.extract_archive(p, None);
+                }
+            }
+        });
+        add("compress", |w| w.op_compress());
 
         // New file: target is a template name, or "" for an empty file.
         let a = gio::SimpleAction::new("new-file", Some(glib::VariantTy::STRING));
@@ -170,10 +178,16 @@ impl Window {
         self.open_files(files, choose_app);
     }
 
-    /// Open files with their default app (or ask which app).
+    /// Open files with their default app (or ask which app). Archives are
+    /// extracted instead, like a double-click on macOS.
     pub(crate) fn open_files(&self, files: Vec<FileItem>, choose_app: bool) {
         let window = self.gtk_window();
         for item in files {
+            if !choose_app && looks_like_archive(&item)
+                && let Some(p) = item.path() {
+                    self.extract_archive(p, None);
+                    continue;
+                }
             let launcher = gtk::FileLauncher::new(Some(&item.target()));
             launcher.set_always_ask(choose_app);
             let weak = self.downgrade();
@@ -665,6 +679,93 @@ impl Window {
         });
     }
 
+    // ------------------------------------------------------------ archives
+
+    /// Extract next to the archive, asking for a password only if needed.
+    pub(crate) fn extract_archive(&self, archive: PathBuf, password: Option<String>) {
+        use strata_core::archive::{self, ArchiveError, Limits};
+        let name = name_of(&archive);
+        let weak = self.downgrade();
+        let a = archive.clone();
+        let pw = password.clone();
+        self.jobs().run(
+            &self.parent_widget(),
+            &format!("Extracting “{name}”"),
+            move |obs, cancel| archive::extract(&a, pw.as_deref(), Limits::default(), obs, cancel),
+            move |result| {
+                let Some(w) = Window::from_weak(&weak) else { return };
+                match result {
+                    Ok(done) => {
+                        w.select_results(std::slice::from_ref(&done.path));
+                        let mut text = format!("Extracted “{}”", name_of(&done.path));
+                        if done.skipped_links > 0 {
+                            text.push_str(&format!(" · {} unsafe link{} left out", done.skipped_links, if done.skipped_links == 1 { "" } else { "s" }));
+                        }
+                        record(Action::Created(vec![done.path]));
+                        w.toast_undo(&text);
+                    }
+                    Err(e @ (ArchiveError::NeedPassword | ArchiveError::WrongPassword)) => {
+                        let wrong = e == ArchiveError::WrongPassword;
+                        let weak = w.downgrade();
+                        glib::MainContext::default().spawn_local(async move {
+                            let Some(w) = Window::from_weak(&weak) else { return };
+                            if let Some(pw) = crate::dialogs::ask_password(&w.parent_widget(), &name, wrong).await {
+                                w.extract_archive(archive, Some(pw));
+                            }
+                        });
+                    }
+                    Err(ArchiveError::Cancelled) => w.toast("Extraction cancelled. Nothing was left behind."),
+                    Err(e) => {
+                        let err = OpError { path: archive.clone(), message: e.message(&name), hint: e.hint() };
+                        crate::dialogs::show_errors(&w.parent_widget(), "Couldn't Extract", &[err]);
+                    }
+                }
+            },
+        );
+    }
+
+    fn op_compress(&self) {
+        let Some(paths) = self.selected_paths() else { return };
+        let Some(dir) = paths[0].parent().map(Path::to_path_buf) else { return };
+        let base = match paths.as_slice() {
+            [one] => {
+                let n = name_of(one);
+                if one.is_dir() { n } else { names::split_ext(&n).0.to_string() }
+            }
+            _ => "Archive".to_string(),
+        };
+        let weak = self.downgrade();
+        glib::MainContext::default().spawn_local(async move {
+            let Some(w) = Window::from_weak(&weak) else { return };
+            let Some(choice) = crate::dialogs::ask_compress(&w.parent_widget(), &base, dir.clone()).await else { return };
+            let weak = w.downgrade();
+            let title = format!("Compressing {}", count(paths.len()));
+            let name = choice.name.clone();
+            w.jobs().run(
+                &w.parent_widget(),
+                &title,
+                move |obs, cancel| {
+                    strata_core::archive::compress(&paths, &dir, &choice.name, choice.format, choice.password.as_deref(), obs, cancel)
+                },
+                move |result| {
+                    let Some(w) = Window::from_weak(&weak) else { return };
+                    match result {
+                        Ok(p) => {
+                            w.select_results(std::slice::from_ref(&p));
+                            w.toast_undo(&format!("Created “{}”", name_of(&p)));
+                            record(Action::Created(vec![p]));
+                        }
+                        Err(strata_core::archive::ArchiveError::Cancelled) => w.toast("Compression cancelled. Nothing was left behind."),
+                        Err(e) => {
+                            let err = OpError { path: PathBuf::from(&name), message: e.message(&name), hint: e.hint() };
+                            crate::dialogs::show_errors(&w.parent_widget(), "Couldn't Compress", &[err]);
+                        }
+                    }
+                },
+            );
+        });
+    }
+
     // --------------------------------------------------------------- drop
 
     pub(crate) fn handle_drop(&self, files: Vec<gio::File>, target: gio::File, action: gdk::DragAction) {
@@ -781,3 +882,14 @@ async fn read_mime(cb: &gdk::Clipboard, mime: &str) -> Option<String> {
     String::from_utf8(out).ok()
 }
 
+
+/// Is this item an archive that a double-click should extract? Decided by
+/// content (magic bytes), so renamed archives work and .docx files don't.
+pub fn looks_like_archive(item: &FileItem) -> bool {
+    use strata_core::archive;
+    let Some(p) = item.path() else { return false };
+    if item.is_dir() {
+        return false;
+    }
+    archive::is_extractable(&p, archive::detect(&p).ok().flatten())
+}

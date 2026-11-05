@@ -137,7 +137,12 @@ impl InfoPanel {
             (d, f) => format!("{d} folders, {f} files"),
         });
         let bytes: u64 = items.iter().filter(|i| !i.is_dir()).map(|i| i.meta().size).sum();
-        self.row("Size", &if dirs > 0 { format!("{} (files only)", format::size(bytes)) } else { format::size(bytes) });
+        let size = match (dirs, files) {
+            (_, 0) => "Folders: see Properties (Alt+Enter)".to_string(),
+            (0, _) => format::size(bytes),
+            _ => format!("{} in files, plus folders", format::size(bytes)),
+        };
+        self.row("Size", &size);
     }
 
     fn show_folder(&self, folder: &gio::File) {

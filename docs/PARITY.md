@@ -5,7 +5,7 @@ Reference: Dolphin (KF6) handbook. This file is updated at the end of every mile
 
 "Tested" here means exercised in the real app through its actions (scripted with `STRATA_ACTIONS`, checked in screenshots) or by unit tests. GTK4 has no public API for synthesizing key presses, so behaviour that only runs on physical key or mouse input is marked 🟡 until it's checked by hand.
 
-_Last updated: Milestone 2 (file operations)._
+_Last updated: Milestone 3 (archives)._
 
 The test hooks can now also select items, type into dialogs, answer dialogs, open context menus and simulate drops (`select:`, `type:`, `respond:`, `menu`, `drop-copy:` …; see `crates/strata/src/debug.rs`).
 
@@ -88,8 +88,11 @@ The test hooks can now also select items, type into dialogs, answer dialogs, ope
 ## Beyond Dolphin (this project)
 | Feature | Status | Notes |
 |---|---|---|
-| Double-click archive extraction | ❌ | Milestone 3 |
-| Compress from context menu | ❌ | |
+| Double-click archive extraction | ✅ | Detected by content, so renamed archives work and ZIP-based documents (.docx, .odt, .epub, .jar …) still open normally. Extracts next to the archive: one top-level item is kept as is, several go into a folder named after the archive, never overwriting ("Project (2)"). Runs in the background with progress and cancel, then selects the result, with an Undo toast. Tested in the app: multi-item zip, single-folder tar.gz, disguised zip, password zip (ZipCrypto, from the system `zip` tool), malicious zip, and cancelling a 1.5 GB extraction (nothing left behind). |
+| Formats | 🟡 | zip (incl. ZipCrypto and AES passwords), tar, tar.gz, tar.bz2, tar.xz, tar.zst, gz, bz2, xz, zst, 7z (incl. AES passwords) and rar (via libarchive) are all unit-tested. Password-protected RAR uses the system `unrar` if installed (its licence doesn't allow bundling); that path is untested. RAR symlinks aren't extracted (libarchive doesn't expose their targets). |
+| Password only when needed | ✅ | Asked only when the archive turns out to be encrypted; a wrong password says so and asks again |
+| Extraction safety | ✅ | Unit-tested: ".." traversal aborts with nothing extracted; absolute paths become relative; symlinks are created last and dropped if they resolve outside what's placed next to the archive (including link-chain tricks); nothing is written through a symlink; size, entry-count and compression-ratio limits stop bombs; free space is watched; setuid/setgid bits are dropped. A crash mid-extraction is cleaned up on the next start. |
+| Compress from context menu | ✅ | ZIP, tar.gz, tar.xz, tar.zst or 7z, with an optional password for ZIP (AES-256) and 7z (AES-256, encrypted headers). Never overwrites; temporary file renamed into place; progress and cancel. Round trips for every format are unit-tested; the dialog and ZIP output are checked in the app (and read back with Python's `zipfile`). |
 | Quick Look (Space) | ❌ | Milestone 4 |
 | Indexed search < 50 ms / 1M files | ❌ | Milestone 5 |
 | Teku app installation | ❌ | Milestone 6 |
