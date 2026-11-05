@@ -1,6 +1,6 @@
-# Strata — plan and architecture
+# Kivo — plan and architecture
 
-> "Strata" is a working name. Changing it later is a find-and-replace plus a new app ID.
+> The app is called **Kivo** (app ID `io.github.anuzdhk.Kivo`).
 
 ## Toolkit decision
 
@@ -18,7 +18,7 @@
 
 ```
 crates/
-  strata-core/     UI-free library, no GTK dependency. Unit + integration tests.
+  kivo-core/     UI-free library, no GTK dependency. Unit + integration tests.
     fs/            listing, sort/group, copy/move/link/rename/batch-rename,
                    conflict policy, undo journal, job engine (cancel, progress)
     trash/         freedesktop Trash spec (home + per-mount .Trash-$uid), restore
@@ -28,8 +28,8 @@ crates/
     meta/          tags/comments/rating as xattrs (Dolphin/Baloo compatible), git status
     thumbs/        freedesktop thumbnail cache paths, validation, writing
     settings/      config, per-folder view state, session, themes (TOML)
-  strata-indexd/   optional background indexer binary (low priority I/O + CPU)
-  strata/          GTK4 application: windows, views, panels, Quick Look, dialogs
+  kivo-indexd/   optional background indexer binary (low priority I/O + CPU)
+  kivo/          GTK4 application: windows, views, panels, Quick Look, dialogs
 data/              .desktop, metainfo, MIME, icons, themes, templates
 packaging/         deb, rpm spec, PKGBUILD, AppImage, install.sh
 docs/              this plan, PARITY.md, BENCHMARKS.md, screenshots
@@ -53,18 +53,18 @@ The UI talks to the core only through plain Rust types and channels. Every disk,
 - Unindexed locations: a streaming parallel walk (`ignore` crate) that sends batches of results to the UI.
 - `cargo bench` with criterion against a synthetic 1M-path set and against a real home directory. The numbers will go in `docs/BENCHMARKS.md`.
 
-**Teku port** (`strata-core::install`), matching `teku` v0.1.2 behaviour:
+**Teku port** (`kivo-core::install`), matching `teku` v0.1.2 behaviour:
 - Detection reads the file contents, not the name. ar archive with `debian-binary` → deb. RPM lead magic `ED AB EE DB` → rpm. ELF/ISO with `AI\x01`/`AI\x02` at offset 8 → AppImage. `[Flatpak Ref]` header → flatpakref. `MZ`/PE → Windows. OLE2 + `.msi` → Windows. A `koly` trailer → dmg. `xar!` → pkg. Foreign-OS extension fallback works the same as in Teku. A known package extension with non-matching contents is reported as a fake or corrupted file.
 - OS family comes from `ID` then `ID_LIKE` (debian/ubuntu, fedora/rhel/centos, suse/opensuse*/sles, arch), with `/usr/lib/os-release` as fallback.
-- Routes: `pkexec env DEBIAN_FRONTEND=noninteractive apt-get install -y`, `pkexec dnf install -y`, `pkexec zypper --non-interactive install --allow-unsigned-rpm`, `flatpak install --noninteractive --from`. AppImages go to `~/Applications`, are made executable, and get `.desktop` metadata and `.DirIcon` extracted for a menu entry marked `X-Teku-AppImage`. That keeps Teku-installed and Strata-installed AppImages interoperable, so either tool can remove them.
-- pkexec exit 126/127 → "Authentication cancelled". History goes in Teku's tab-separated format under `$XDG_STATE_HOME/strata/`, plus a per-install log.
+- Routes: `pkexec env DEBIAN_FRONTEND=noninteractive apt-get install -y`, `pkexec dnf install -y`, `pkexec zypper --non-interactive install --allow-unsigned-rpm`, `flatpak install --noninteractive --from`. AppImages go to `~/Applications`, are made executable, and get `.desktop` metadata and `.DirIcon` extracted for a menu entry marked `X-Teku-AppImage`. That keeps Teku-installed and Kivo-installed AppImages interoperable, so either tool can remove them.
+- pkexec exit 126/127 → "Authentication cancelled". History goes in Teku's tab-separated format under `$XDG_STATE_HOME/kivo/`, plus a per-install log.
 
 **Metadata.** Tags go in `user.xdg.tags`, comments in `user.xdg.comment` and ratings in `user.baloo.rating`. These are the xattrs Dolphin/Baloo read and write, so tags show up in both apps.
 
 **Thumbnails.** Uses the freedesktop spec: `$XDG_CACHE_HOME/thumbnails/{normal,large,x-large,xx-large}/<md5(uri)>.png`, with `Thumb::URI`/`Thumb::MTime` validation and the `fail/` directory. Images are thumbnailed in-process. Everything else goes through the system's registered thumbnailers (`/usr/share/thumbnailers/*.thumbnailer`), which is the same cache Nautilus and Dolphin use.
 
 **Theming.**
-- Each theme is a TOML file of colour tokens, mapped onto libadwaita CSS variables plus our own tokens. User themes live in `~/.config/strata/themes/*.toml`.
+- Each theme is a TOML file of colour tokens, mapped onto libadwaita CSS variables plus our own tokens. User themes live in `~/.config/kivo/themes/*.toml`.
 - The accent is a single colour. Foreground and text-on-accent variants are derived per theme in OKLCH and nudged in lightness until they reach WCAG AA (4.5:1 for text, 3:1 for UI). This check also runs as a unit test across all themes × presets.
 - Live switching swaps one `CssProvider`.
 - Translucent checks whether the display is composited (always true on Wayland). On X11 without a compositor it falls back to a solid background. The content surfaces stay ≥ 85% opaque, so text contrast doesn't depend on the wallpaper.

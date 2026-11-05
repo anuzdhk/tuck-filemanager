@@ -4,12 +4,12 @@ All numbers are from the development machine: Ubuntu 26.04, 20 threads, NVMe, GN
 
 ## Opening a folder with 100,000 files (Milestone 1)
 
-Set-up: `seq 1 100000 | sed 's/^/file-/;s/$/.txt/' | xargs touch` in an empty folder. Timings are printed with `STRATA_DEBUG_TIMING=1`.
+Set-up: `seq 1 100000 | sed 's/^/file-/;s/$/.txt/' | xargs touch` in an empty folder. Timings are printed with `KIVO_DEBUG_TIMING=1`.
 
 | Stage | Time |
 |---|---|
 | First 300 items on screen | ~50 ms |
-| Read directory + stat 100k entries (worker thread, `strata-core::listing`) | ~0.25 s |
+| Read directory + stat 100k entries (worker thread, `kivo-core::listing`) | ~0.25 s |
 | Build 100k `FileItem`s (main thread) | 30–55 ms |
 | Insert into GTK models (filter → sort → selection → view), window already open | 0.33–2.3 s |
 | Same insert with `GTK_A11Y=none` | 0.27–0.5 s |
@@ -27,10 +27,10 @@ Reproduce:
 
 ```bash
 mkdir -p /tmp/big && (cd /tmp/big && seq 1 100000 | sed 's/^/file-/;s/$/.txt/' | xargs touch)
-cargo build --release -p strata
-STRATA_DEBUG_TIMING=1 ./target/release/strata /tmp/big
+cargo build --release -p kivo
+KIVO_DEBUG_TIMING=1 ./target/release/kivo /tmp/big
 # Simulate opening the folder after the window is up:
-STRATA_DEBUG_TIMING=1 STRATA_LIST_DELAY_MS=2000 ./target/release/strata /tmp/big
+KIVO_DEBUG_TIMING=1 KIVO_LIST_DELAY_MS=2000 ./target/release/kivo /tmp/big
 ```
 
 ## Search (Milestone 5)
