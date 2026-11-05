@@ -153,7 +153,7 @@ impl Breadcrumb {
         for (i, (label, target)) in segments.into_iter().enumerate() {
             if i > 0 {
                 let sep = gtk::Image::builder()
-                    .icon_name("go-next-symbolic")
+                    .icon_name("kivo-chevron-symbolic")
                     .pixel_size(12)
                     .css_classes(["crumb-sep"])
                     .build();

@@ -281,7 +281,7 @@ impl Window {
         let last = install::state_dir().join("last.log");
         if last.exists() {
             let row = adw::ActionRow::builder().title("Last Install Log").activatable(true).build();
-            row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
+            row.add_suffix(&gtk::Image::from_icon_name("kivo-forward-symbolic"));
             let parent2 = parent.clone();
             row.connect_activated(move |_| show_log(&parent2, &last));
             logs.add(&row);

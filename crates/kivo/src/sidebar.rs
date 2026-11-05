@@ -149,6 +149,10 @@ impl Sidebar {
         self.0.monitor.connect_volume_removed(move |_, _| r());
     }
 
+    pub fn rebuild_public(&self) {
+        self.rebuild();
+    }
+
     fn rebuild(&self) {
         let list = &self.0.list;
         while let Some(c) = list.first_child() {
@@ -164,11 +168,11 @@ impl Sidebar {
                 self.place(&mut rows, d.label(), user_dir_icon(d), Target::File(file), None);
             }
         }
-        self.place(&mut rows, "Recent", "document-open-recent-symbolic", Target::File(gio::File::for_uri("recent:///")), None);
-        self.place(&mut rows, "Trash", "user-trash-symbolic", Target::File(gio::File::for_uri("trash:///")), None);
+        self.place(&mut rows, "Recent", "kivo-recent-symbolic", Target::File(gio::File::for_uri("recent:///")), None);
+        self.place(&mut rows, "Trash", "kivo-trash-symbolic", Target::File(gio::File::for_uri("trash:///")), None);
 
         self.heading(&mut rows, "Locations");
-        self.place(&mut rows, "Computer", "drive-harddisk-symbolic", Target::File(gio::File::for_path("/")), None);
+        self.place(&mut rows, "Computer", "kivo-drive-symbolic", Target::File(gio::File::for_path("/")), None);
 
         // Devices: mounted volumes, then unmounted ones that can be mounted.
         let mut devices: Vec<(String, String, Target, Option<gio::Mount>)> = Vec::new();
@@ -180,14 +184,14 @@ impl Sidebar {
             if root.path().is_some_and(|p| p.as_os_str() == "/") {
                 continue;
             }
-            let icon = icon_name(&m.symbolic_icon()).unwrap_or_else(|| "drive-removable-media-symbolic".into());
+            let icon = icon_name(&m.symbolic_icon()).unwrap_or_else(|| "kivo-removable-symbolic".into());
             devices.push((m.name().to_string(), icon, Target::File(root), Some(m)));
         }
         for v in self.0.monitor.volumes() {
             if v.get_mount().is_some() || !v.can_mount() {
                 continue;
             }
-            let icon = icon_name(&v.symbolic_icon()).unwrap_or_else(|| "drive-harddisk-symbolic".into());
+            let icon = icon_name(&v.symbolic_icon()).unwrap_or_else(|| "kivo-drive-symbolic".into());
             devices.push((v.name().to_string(), icon, Target::Volume(v), None));
         }
         if !devices.is_empty() {
@@ -230,7 +234,7 @@ impl Sidebar {
         b.append(&gtk::Label::builder().label(label).xalign(0.0).hexpand(true).ellipsize(gtk::pango::EllipsizeMode::End).build());
         if let Some(m) = mount.filter(|m| m.can_unmount() || m.can_eject()) {
             let eject = gtk::Button::builder()
-                .icon_name("media-eject-symbolic")
+                .icon_name("kivo-eject-symbolic")
                 .tooltip_text(format!("Unmount {label}"))
                 .css_classes(["flat", "circular", "eject"])
                 .valign(gtk::Align::Center)
@@ -345,13 +349,13 @@ impl Sidebar {
 
 fn user_dir_icon(d: UserDir) -> &'static str {
     match d {
-        UserDir::Home => "user-home-symbolic",
-        UserDir::Desktop => "user-desktop-symbolic",
-        UserDir::Documents => "folder-documents-symbolic",
-        UserDir::Downloads => "folder-download-symbolic",
-        UserDir::Music => "folder-music-symbolic",
-        UserDir::Pictures => "folder-pictures-symbolic",
-        UserDir::Videos => "folder-videos-symbolic",
+        UserDir::Home => "kivo-home-symbolic",
+        UserDir::Desktop => "kivo-desktop-symbolic",
+        UserDir::Documents => "kivo-documents-symbolic",
+        UserDir::Downloads => "kivo-downloads-symbolic",
+        UserDir::Music => "kivo-music-symbolic",
+        UserDir::Pictures => "kivo-pictures-symbolic",
+        UserDir::Videos => "kivo-videos-symbolic",
         UserDir::Templates => "folder-templates-symbolic",
         UserDir::Public => "folder-publicshare-symbolic",
     }

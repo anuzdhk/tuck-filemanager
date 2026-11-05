@@ -148,7 +148,7 @@ impl InfoPanel {
     }
 
     fn show_folder(&self, folder: &gio::File) {
-        self.0.image.set_icon_name(Some("folder"));
+        self.0.image.set_from_gicon(&crate::theme_ui::file_icon("folder", true, folder.path().as_deref()));
         self.0.name.set_label(&crate::pane::folder_title(folder));
         self.0.kind.set_label("Folder");
         let weak = Rc::downgrade(&self.0);

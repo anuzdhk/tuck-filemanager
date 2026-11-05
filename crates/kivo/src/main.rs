@@ -12,7 +12,9 @@ mod properties;
 mod quicklook;
 mod search_ui;
 mod searchbar;
+mod theme_ui;
 mod thumbs_ui;
+mod prefs;
 mod info;
 mod install_ui;
 mod item;
@@ -66,6 +68,7 @@ pub const SHORTCUTS: &[(&str, &[&str], &str, &str)] = &[
     ("win.toggle-info", &["F11"], "View", "Show information panel"),
     ("win.filter", &["<Ctrl>i"], "Selection", "Filter items"),
     ("app.shortcuts", &["<Ctrl>question", "<Ctrl>F1"], "General", "Keyboard shortcuts"),
+    ("app.preferences", &["<Ctrl>comma"], "General", "Preferences"),
     ("app.quit", &["<Ctrl>q"], "General", "Quit"),
 ];
 
@@ -105,6 +108,7 @@ fn main() -> glib::ExitCode {
 
     app.connect_startup(|app| {
         load_css();
+        theme_ui::init();
         search_ui::start();
         // Clean up after a crash or kill in the middle of a copy.
         let removed = kivo_core::ops::journal::recover(&kivo_core::ops::journal::file());
@@ -122,6 +126,10 @@ fn main() -> glib::ExitCode {
             }
         });
         app.add_action(&quit);
+        let prefs = gio::SimpleAction::new("preferences", None);
+        let a = app.clone();
+        prefs.connect_activate(move |_, _| prefs::show(a.active_window().as_ref()));
+        app.add_action(&prefs);
         let shortcuts = gio::SimpleAction::new("shortcuts", None);
         let a = app.clone();
         shortcuts.connect_activate(move |_, _| show_shortcuts(a.active_window().as_ref()));

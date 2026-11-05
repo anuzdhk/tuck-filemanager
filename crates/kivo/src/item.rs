@@ -17,7 +17,6 @@ use gtk::prelude::*;
 use gtk::subclass::prelude::*;
 use kivo_core::group::{Group, group_now};
 use kivo_core::listing::RawEntry;
-use kivo_core::paths::{UserDir, UserDirs};
 use kivo_core::sort::SortKey;
 use kivo_core::{EntryKind, EntryMeta};
 
@@ -40,6 +39,7 @@ mod imp {
         pub hidden: Cell<bool>,
         pub content_type: RefCell<String>,
         pub icon: RefCell<Option<gio::Icon>>,
+        pub icon_gen: Cell<u32>,
         pub is_symlink: Cell<bool>,
         pub link_target: RefCell<Option<String>>,
         pub created: Cell<Option<i64>>,
@@ -205,17 +205,19 @@ impl FileItem {
         self.imp().content_type.borrow().clone()
     }
 
+    /// Icon in the current icon style (recomputed after style changes).
     pub fn icon(&self) -> gio::Icon {
         let imp = self.imp();
-        if let Some(i) = imp.icon.borrow().as_ref() {
-            return i.clone();
-        }
-        let icon = if self.is_dir() {
-            special_folder_icon(&self.file()).unwrap_or_else(|| icon_for(&imp.content_type.borrow()))
-        } else {
-            icon_for(&imp.content_type.borrow())
-        };
+        let generation = crate::theme_ui::icon_generation();
+        if imp.icon_gen.get() == generation
+            && let Some(i) = imp.icon.borrow().as_ref() {
+                return i.clone();
+            }
+        let name = imp.meta.borrow().name.clone();
+        let path = if self.is_dir() { self.path() } else { None };
+        let icon = crate::theme_ui::file_icon(&name, self.is_dir(), path.as_deref());
         *imp.icon.borrow_mut() = Some(icon.clone());
+        imp.icon_gen.set(generation);
         icon
     }
 
@@ -272,8 +274,6 @@ fn attr(info: &gio::FileInfo, name: &str) -> Option<String> {
 thread_local! {
     static TYPE_BY_SUFFIX: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
     static DESCRIPTIONS: RefCell<HashMap<String, String>> = RefCell::new(HashMap::new());
-    static ICONS: RefCell<HashMap<String, gio::Icon>> = RefCell::new(HashMap::new());
-    static USER_DIRS: UserDirs = UserDirs::load();
 }
 
 /// Content type from the name, cached by suffix: 100,000 files with a
@@ -308,30 +308,4 @@ fn describe(content_type: &str) -> String {
             .or_insert_with(|| gio::content_type_get_description(content_type).to_string())
             .clone()
     })
-}
-
-fn icon_for(content_type: &str) -> gio::Icon {
-    ICONS.with(|m| {
-        m.borrow_mut()
-            .entry(content_type.to_string())
-            .or_insert_with(|| gio::content_type_get_icon(content_type))
-            .clone()
-    })
-}
-
-fn special_folder_icon(file: &gio::File) -> Option<gio::Icon> {
-    let path = file.path()?;
-    let dir = USER_DIRS.with(|d| d.identify(&path))?;
-    let name = match dir {
-        UserDir::Home => "user-home",
-        UserDir::Desktop => "user-desktop",
-        UserDir::Documents => "folder-documents",
-        UserDir::Downloads => "folder-download",
-        UserDir::Music => "folder-music",
-        UserDir::Pictures => "folder-pictures",
-        UserDir::Videos => "folder-videos",
-        UserDir::Templates => "folder-templates",
-        UserDir::Public => "folder-publicshare",
-    };
-    Some(gio::ThemedIcon::from_names(&[name, "folder"]).upcast())
 }

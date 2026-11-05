@@ -227,7 +227,7 @@ impl Pane {
         titles.append(&title);
         titles.append(&subtitle);
         let sort_button = gtk::MenuButton::builder()
-            .icon_name("view-sort-ascending-symbolic")
+            .icon_name("kivo-sort-symbolic")
             .menu_model(&sort_menu())
             .tooltip_text("Sort and Group")
             .css_classes(["flat", "circular"])
@@ -248,7 +248,7 @@ impl Pane {
             .build();
         filter_entry.update_property(&[gtk::accessible::Property::Label("Filter by name")]);
         let filter_close = gtk::Button::builder()
-            .icon_name("window-close-symbolic")
+            .icon_name("kivo-close-symbolic")
             .tooltip_text("Close Filter")
             .css_classes(["flat", "circular"])
             .build();
@@ -610,7 +610,7 @@ impl Pane {
 
     fn show_error(&self, e: &glib::Error) {
         let (title, hint) = describe_error(e);
-        self.0.status.set_icon_name(Some("dialog-warning-symbolic"));
+        self.0.status.set_icon_name(Some("kivo-warning-symbolic"));
         self.0.status.set_title(&title);
         self.0.status.set_description(Some(&hint));
         self.0.stack.set_visible_child_name("status");
@@ -619,7 +619,7 @@ impl Pane {
     fn show_view(&self) {
         let empty = self.0.sort_model.n_items() == 0;
         if self.0.stack.visible_child_name().as_deref() == Some("status")
-            && self.0.status.icon_name().as_deref() == Some("dialog-warning-symbolic")
+            && self.0.status.icon_name().as_deref() == Some("kivo-warning-symbolic")
             && !self.0.loading.get()
             && self.store().n_items() == 0
         {
@@ -629,7 +629,7 @@ impl Pane {
         if empty && !self.0.loading.get() {
             let filtered = !self.0.filter_text.borrow().is_empty();
             let hidden_only = self.store().n_items() > 0;
-            self.0.status.set_icon_name(Some("folder-symbolic"));
+            self.0.status.set_icon_name(Some("kivo-folder-symbolic"));
             if filtered {
                 self.0.status.set_title("No Matches");
                 self.0.status.set_description(Some("No items in this folder match the filter."));
@@ -737,13 +737,18 @@ impl Pane {
 
     fn show_search_view(&self) {
         if self.0.sort_model.n_items() == 0 {
-            self.0.status.set_icon_name(Some("system-search-symbolic"));
+            self.0.status.set_icon_name(Some("kivo-search-symbolic"));
             self.0.status.set_title("No Results");
             self.0.status.set_description(Some("Try fewer words, check the spelling, or search everywhere instead of this folder."));
             self.0.stack.set_visible_child_name("status");
         } else {
             self.0.stack.set_visible_child_name(self.settings().mode.id());
         }
+    }
+
+    /// Rebind every cell (icon style or accent changed).
+    pub fn refresh_icons(&self) {
+        self.build_factories();
     }
 
     /// Leave search results and show the folder again.
@@ -1524,7 +1529,7 @@ impl Pane {
             let li = obj.downcast_ref::<gtk::ListItem>().expect("ListItem");
             let image = gtk::Image::builder().pixel_size(size).build();
             let emblem = gtk::Image::builder()
-                .icon_name("emblem-symbolic-link")
+                .icon_name("kivo-link-symbolic")
                 .pixel_size((size / 3).max(12))
                 .halign(gtk::Align::End)
                 .valign(gtk::Align::End)
@@ -1542,6 +1547,10 @@ impl Pane {
                 .hexpand(true)
                 .css_classes(["tile-name"])
                 .build();
+            // Break long names between characters, but never add hyphens.
+            let attrs = gtk::pango::AttrList::new();
+            attrs.insert(gtk::pango::AttrInt::new_insert_hyphens(false));
+            label.set_attributes(Some(&attrs));
             let tile = gtk::Box::builder()
                 .orientation(gtk::Orientation::Vertical)
                 .spacing(8)

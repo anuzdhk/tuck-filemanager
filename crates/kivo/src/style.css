@@ -33,7 +33,7 @@
   font-size: 0.8em;
   font-weight: 700;
   margin: 14px 0 4px 2px;
-  color: color-mix(in srgb, var(--sidebar-fg-color) 72%, var(--sidebar-bg-color));
+  color: var(--kivo-sidebar-dim-fg);
 }
 
 .kivo-sidebar .places > row:first-child .sidebar-heading {
@@ -60,7 +60,7 @@
 
 .storage-detail {
   font-size: 0.82em;
-  color: color-mix(in srgb, var(--sidebar-fg-color) 75%, var(--sidebar-bg-color));
+  color: var(--kivo-sidebar-dim-fg);
 }
 
 .storage-bar trough {
@@ -115,7 +115,7 @@
 
 .pane-subtitle {
   font-size: 0.9em;
-  color: color-mix(in srgb, var(--view-fg-color) 72%, var(--view-bg-color));
+  color: var(--kivo-dim-fg);
 }
 
 .pane {
@@ -157,7 +157,7 @@ gridview.file-grid > child:hover {
 }
 
 gridview.file-grid > child:selected {
-  background: color-mix(in srgb, var(--accent-bg-color) 16%, transparent);
+  background: var(--kivo-selection-bg);
   color: inherit;
 }
 
@@ -204,7 +204,7 @@ columnview.file-details > listview > row {
 }
 
 columnview.file-details > listview > row:selected {
-  background: color-mix(in srgb, var(--accent-bg-color) 22%, transparent);
+  background: var(--kivo-selection-bg);
   color: inherit;
 }
 
@@ -242,7 +242,7 @@ columnview.file-details > header > button {
 
 .info-kind {
   font-size: 0.9em;
-  color: color-mix(in srgb, var(--sidebar-fg-color) 75%, var(--sidebar-bg-color));
+  color: var(--kivo-sidebar-dim-fg);
 }
 
 .info-heading {
@@ -253,7 +253,7 @@ columnview.file-details > header > button {
 
 .info-key {
   font-size: 0.88em;
-  color: color-mix(in srgb, var(--sidebar-fg-color) 72%, var(--sidebar-bg-color));
+  color: var(--kivo-sidebar-dim-fg);
 }
 
 .info-value {
@@ -306,3 +306,40 @@ image.thumbnail {
   padding: 10px 14px;
   border-bottom: 1px solid var(--border-color);
 }
+
+/* ------------------------------------------------------- dim text in GTK */
+
+.dim-label {
+  color: var(--kivo-dim-fg);
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------- density */
+
+window.density-compact gridview.icons .tile { padding: 6px 4px 6px 4px; }
+window.density-compact gridview.compact .tile { padding: 2px 8px; min-height: 22px; }
+window.density-compact columnview.file-details > listview > row { min-height: 26px; }
+window.density-compact .kivo-sidebar .places > row,
+window.density-compact .kivo-sidebar .places > row { min-height: 28px; }
+window.density-compact .pane-heading { padding: 10px 18px 6px 18px; }
+
+window.density-spacious gridview.icons .tile { padding: 18px 10px 14px 10px; }
+window.density-spacious gridview.compact .tile { padding: 9px 14px; min-height: 36px; }
+window.density-spacious columnview.file-details > listview > row { min-height: 44px; }
+window.density-spacious .kivo-sidebar .places > row,
+window.density-spacious .kivo-sidebar .places > row { min-height: 42px; }
+window.density-spacious .pane-heading { padding: 26px 30px 14px 30px; }
+
+/* ------------------------------------------------------ Material icons */
+
+/* Symbolic icons take the accent colour; on accent backgrounds they
+   follow the text colour so they stay readable. */
+window.icons-material image:not(.thumbnail) { color: var(--accent-color); }
+window.icons-material row:selected image,
+window.icons-material button.suggested-action image,
+window.icons-material button.destructive-action image,
+window.icons-material gridview > child:selected image:not(.thumbnail) { color: inherit; }
+
+/* ------------------------------------------------------------ focus */
+
+*:focus-visible { outline-color: var(--accent-color); }

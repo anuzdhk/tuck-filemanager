@@ -254,7 +254,7 @@ impl JobRow {
             .css_classes(["job-title"])
             .build();
         let stop = gtk::Button::builder()
-            .icon_name("process-stop-symbolic")
+            .icon_name("kivo-stop-symbolic")
             .tooltip_text("Cancel")
             .css_classes(["flat", "circular"])
             .valign(gtk::Align::Center)

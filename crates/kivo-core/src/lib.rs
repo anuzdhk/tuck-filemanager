@@ -7,6 +7,7 @@
 pub mod archive;
 pub mod entry;
 pub mod format;
+pub mod icons;
 pub mod install;
 pub mod group;
 pub mod listing;
@@ -19,6 +20,7 @@ pub mod search;
 pub mod settings;
 pub mod sort;
 pub mod terminal;
+pub mod theme;
 pub mod thumbs;
 pub mod trash;
 pub mod typeahead;

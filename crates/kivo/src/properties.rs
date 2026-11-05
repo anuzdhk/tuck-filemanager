@@ -58,7 +58,7 @@ pub fn show(parent: &gtk::Widget, items: &[FileItem]) {
             let loc = parent_dir.path().map(|p| paths::display(&p, &paths::home())).unwrap_or_else(|| parent_dir.uri().to_string());
             let r = row(&general, "Location", &loc);
             let open = gtk::Button::builder()
-                .icon_name("folder-open-symbolic")
+                .icon_name("kivo-open-folder-symbolic")
                 .tooltip_text("Open Containing Folder")
                 .valign(gtk::Align::Center)
                 .css_classes(["flat"])

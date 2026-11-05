@@ -70,7 +70,7 @@ impl QuickLook {
     pub fn new(parent: &impl IsA<gtk::Window>) -> Self {
         let title = adw::WindowTitle::new("Quick Look", "");
         let open_btn = gtk::Button::builder().label("Open").css_classes(["suggested-action"]).build();
-        let open_with_btn = gtk::Button::builder().icon_name("view-more-symbolic").tooltip_text("Open With…").build();
+        let open_with_btn = gtk::Button::builder().icon_name("kivo-more-symbolic").tooltip_text("Open With…").build();
         open_with_btn.update_property(&[gtk::accessible::Property::Label("Open With…")]);
         let extract_btn = gtk::Button::builder().label("Extract").visible(false).build();
         let install_btn = gtk::Button::builder().label("Install…").visible(false).css_classes(["suggested-action"]).build();
@@ -548,7 +548,7 @@ impl QuickLook {
                         let list = gtk::ListBox::builder().selection_mode(gtk::SelectionMode::None).css_classes(["boxed-list"]).build();
                         list.update_property(&[gtk::accessible::Property::Label("Archive contents")]);
                         for e in l.entries.iter().take(1000) {
-                            let icon = if e.is_dir { "folder-symbolic" } else { "text-x-generic-symbolic" };
+                            let icon = if e.is_dir { "kivo-folder-symbolic" } else { "kivo-file-symbolic" };
                             let row = adw::ActionRow::builder().title(glib::markup_escape_text(&e.name)).build();
                             row.add_prefix(&gtk::Image::from_icon_name(icon));
                             if !e.is_dir && e.size > 0 {
@@ -592,8 +592,8 @@ impl QuickLook {
                     let flow = gtk::FlowBox::builder().selection_mode(gtk::SelectionMode::None).max_children_per_line(6).column_spacing(12).row_spacing(12).margin_top(12).build();
                     for (n, is_dir) in names.iter().take(24) {
                         let cell = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(4).width_request(96).build();
-                        let icon = if *is_dir { "folder" } else { "text-x-generic" };
-                        cell.append(&gtk::Image::builder().icon_name(icon).pixel_size(48).build());
+                        let icon = crate::theme_ui::file_icon(n, *is_dir, None);
+                        cell.append(&gtk::Image::builder().gicon(&icon).pixel_size(48).build());
                         cell.append(&gtk::Label::builder().label(n).ellipsize(gtk::pango::EllipsizeMode::Middle).max_width_chars(12).css_classes(["caption"]).build());
                         flow.append(&cell);
                     }

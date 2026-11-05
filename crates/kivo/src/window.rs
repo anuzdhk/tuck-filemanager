@@ -102,15 +102,15 @@ impl Window {
         sidebar_tv.set_content(Some(&sidebar.widget()));
 
         // ---- header bar
-        let back = icon_button("go-previous-symbolic", "Back (Alt+Left)", "win.back");
-        let forward = icon_button("go-next-symbolic", "Forward (Alt+Right)", "win.forward");
-        let up = icon_button("go-up-symbolic", "Enclosing Folder (Alt+Up)", "win.up");
+        let back = icon_button("kivo-back-symbolic", "Back (Alt+Left)", "win.back");
+        let forward = icon_button("kivo-forward-symbolic", "Forward (Alt+Right)", "win.forward");
+        let up = icon_button("kivo-up-symbolic", "Enclosing Folder (Alt+Up)", "win.up");
         let nav = gtk::Box::builder().css_classes(["linked", "nav-buttons"]).build();
         nav.append(&back);
         nav.append(&forward);
         nav.append(&up);
         let sidebar_toggle = gtk::ToggleButton::builder()
-            .icon_name("sidebar-show-symbolic")
+            .icon_name("kivo-sidebar-symbolic")
             .tooltip_text("Show Sidebar (F9)")
             .build();
         sidebar_toggle.update_property(&[gtk::accessible::Property::Label("Show Sidebar")]);
@@ -121,9 +121,9 @@ impl Window {
         let views_box = gtk::Box::builder().css_classes(["linked", "view-switch"]).build();
         let mut group: Option<gtk::ToggleButton> = None;
         for (mode, icon, tip) in [
-            (ViewMode::Icons, "view-grid-symbolic", "Icons (Ctrl+1)"),
-            (ViewMode::Compact, "view-list-symbolic", "Compact (Ctrl+2)"),
-            (ViewMode::Details, "view-continuous-symbolic", "Details (Ctrl+3)"),
+            (ViewMode::Icons, "kivo-grid-symbolic", "Icons (Ctrl+1)"),
+            (ViewMode::Compact, "kivo-compact-symbolic", "Compact (Ctrl+2)"),
+            (ViewMode::Details, "kivo-details-symbolic", "Details (Ctrl+3)"),
         ] {
             let b = gtk::ToggleButton::builder().icon_name(icon).tooltip_text(tip).build();
             b.update_property(&[gtk::accessible::Property::Label(tip.split(" (").next().unwrap_or(tip))]);
@@ -138,18 +138,18 @@ impl Window {
             view_buttons.push((mode, b));
         }
         let split_button = gtk::ToggleButton::builder()
-            .icon_name("view-dual-symbolic")
+            .icon_name("kivo-split-symbolic")
             .tooltip_text("Split View (F3)")
             .action_name("win.split")
             .build();
         split_button.update_property(&[gtk::accessible::Property::Label("Split View")]);
         let info_button = gtk::ToggleButton::builder()
-            .icon_name("dialog-information-symbolic")
+            .icon_name("kivo-info-symbolic")
             .tooltip_text("Information Panel (F11)")
             .build();
         info_button.update_property(&[gtk::accessible::Property::Label("Information Panel")]);
         let menu = gtk::MenuButton::builder()
-            .icon_name("open-menu-symbolic")
+            .icon_name("kivo-menu-symbolic")
             .menu_model(&main_menu())
             .tooltip_text("Main Menu (F10)")
             .primary(true)
@@ -173,7 +173,7 @@ impl Window {
             gdk::DragAction::COPY | gdk::DragAction::MOVE,
             &[gdk::FileList::static_type()],
         );
-        let new_tab = icon_button("tab-new-symbolic", "New Tab (Ctrl+T)", "win.new-tab");
+        let new_tab = icon_button("kivo-new-tab-symbolic", "New Tab (Ctrl+T)", "win.new-tab");
         new_tab.add_css_class("flat");
         tab_bar.set_end_action_widget(Some(&new_tab));
         let info = InfoPanel::new();
@@ -189,7 +189,7 @@ impl Window {
         info_split.add_css_class("info-split");
 
         let search = crate::searchbar::SearchBar::new();
-        let search_button = gtk::ToggleButton::builder().icon_name("system-search-symbolic").tooltip_text("Search (Ctrl+F)").build();
+        let search_button = gtk::ToggleButton::builder().icon_name("kivo-search-symbolic").tooltip_text("Search (Ctrl+F)").build();
         search_button.update_property(&[gtk::accessible::Property::Label("Search")]);
         search.revealer.bind_property("reveal-child", &search_button, "active").bidirectional().sync_create().build();
         header.pack_end(&search_button);
@@ -302,6 +302,7 @@ impl Window {
         win.setup_file_actions();
         win.wire();
         WINDOWS.with(|w| w.borrow_mut().push(win.clone()));
+        win.restyle();
         win
     }
 
@@ -311,6 +312,41 @@ impl Window {
 
     pub(crate) fn from_weak(w: &Weak<Inner>) -> Option<Window> {
         w.upgrade().map(Window)
+    }
+
+    /// Re-apply theme-dependent window classes on every window.
+    pub fn restyle_all() {
+        WINDOWS.with(|list| {
+            for w in list.borrow().iter() {
+                w.restyle();
+            }
+        });
+    }
+
+    fn restyle(&self) {
+        let win = &self.0.window;
+        for c in crate::theme_ui::ALL_WINDOW_CLASSES {
+            win.remove_css_class(c);
+        }
+        for c in crate::theme_ui::window_classes() {
+            win.add_css_class(c);
+        }
+    }
+
+    /// Rebuild file views so they pick up a new icon style or accent.
+    pub fn refresh_all_icons() {
+        WINDOWS.with(|list| {
+            for w in list.borrow().iter() {
+                for t in w.0.tabs.borrow().iter() {
+                    t.left.refresh_icons();
+                    if let Some(r) = t.right.borrow().as_ref() {
+                        r.refresh_icons();
+                    }
+                }
+                w.0.sidebar.rebuild_public();
+                w.sync_info();
+            }
+        });
     }
 
     /// The Kivo window behind a GTK window (used by test hooks).
@@ -553,7 +589,7 @@ impl Window {
             .build();
         let page = self.0.tab_view.append(&paned);
         page.set_title(&left.title());
-        page.set_icon(Some(&gio::ThemedIcon::new("folder-symbolic")));
+        page.set_icon(Some(&gio::ThemedIcon::new("kivo-folder-symbolic")));
         let tab = Rc::new(Tab { page: page.clone(), paned, left, right: RefCell::new(None), right_active: Cell::new(false) });
         self.0.tabs.borrow_mut().push(tab.clone());
         if select {
@@ -1092,6 +1128,7 @@ fn main_menu() -> gio::Menu {
     s3.append(Some("Reset Zoom"), Some("win.zoom-reset"));
     menu.append_section(None, &s3);
     let s4 = gio::Menu::new();
+    s4.append(Some("_Preferences"), Some("app.preferences"));
     s4.append(Some("Installed Apps…"), Some("win.installed-apps"));
     s4.append(Some("Keyboard Shortcuts"), Some("app.shortcuts"));
     s4.append(Some("About Kivo"), Some("win.about"));

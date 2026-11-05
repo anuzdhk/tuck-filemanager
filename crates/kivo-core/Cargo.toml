@@ -23,8 +23,10 @@ serde_json.workspace = true
 sevenz-rust2 = { version = "0.24.2", features = ["zstd", "deflate"] }
 tantivy = "0.27.0"
 tar = "0.4.46"
+toml = "1.2.0"
 zip = "9.3.0"
 zstd = "0.14.3"
 
 [dev-dependencies]
 tempfile.workspace = true
+usvg = "0.49.0"

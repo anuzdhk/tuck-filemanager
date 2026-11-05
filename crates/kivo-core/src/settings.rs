@@ -145,6 +145,67 @@ impl FolderViews {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum IconStyle {
+    /// Tabler UI icons with Kivo's own folder and document icons.
+    #[default]
+    Normal,
+    /// Material Symbols (rounded), coloured with the accent.
+    Material,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum Density {
+    Compact,
+    #[default]
+    Comfortable,
+    Spacious,
+}
+
+/// Appearance and accessibility settings (`~/.config/kivo/settings.json`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AppSettings {
+    /// "system", a built-in theme id, or "user:<file name>".
+    pub theme: String,
+    /// Accent preset id, "theme", or a custom "#rrggbb".
+    pub accent: String,
+    pub icon_style: IconStyle,
+    /// Text size multiplier (0.8–1.6).
+    pub text_scale: f64,
+    pub density: Density,
+    pub reduce_motion: bool,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            theme: "system".into(),
+            accent: "theme".into(),
+            icon_style: IconStyle::Normal,
+            text_scale: 1.0,
+            density: Density::Comfortable,
+            reduce_motion: false,
+        }
+    }
+}
+
+impl AppSettings {
+    /// Clamp values that may have been edited by hand.
+    pub fn sanitized(mut self) -> Self {
+        if !self.text_scale.is_finite() {
+            self.text_scale = 1.0;
+        }
+        self.text_scale = self.text_scale.clamp(0.8, 1.6);
+        if self.accent.starts_with('#') && crate::theme::Rgb::parse(&self.accent).is_none() {
+            self.accent = "theme".into();
+        }
+        self
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TabState {
     pub left: PathBuf,
@@ -248,6 +309,18 @@ mod tests {
         let fresh: FolderViews = load_json(&p);
         assert!(fresh.folders.is_empty());
         assert!(p.with_extension("json.corrupt").exists(), "corrupt file kept aside");
+    }
+
+    #[test]
+    fn app_settings_defaults_and_sanitizing() {
+        let s: AppSettings = serde_json::from_str(r##"{"theme":"nord","text_scale":9.0,"accent":"#zzz"}"##).unwrap();
+        let s = s.sanitized();
+        assert_eq!(s.theme, "nord");
+        assert_eq!(s.text_scale, 1.6);
+        assert_eq!(s.accent, "theme");
+        assert_eq!(s.icon_style, IconStyle::Normal);
+        let json = serde_json::to_string(&AppSettings::default()).unwrap();
+        assert!(json.contains("\"icon_style\":\"normal\"") && json.contains("comfortable"));
     }
 
     #[test]
