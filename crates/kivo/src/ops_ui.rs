@@ -110,6 +110,12 @@ impl Window {
             }
         });
         add("compress", |w| w.op_compress());
+        add("install", |w| {
+            if let Some(p) = w.selection().into_iter().find_map(|i| i.path().filter(|p| kivo_core::install::is_installable(p))) {
+                w.install_file(p);
+            }
+        });
+        add("installed-apps", |w| w.show_installed_apps());
 
         // New file: target is a template name, or "" for an empty file.
         let a = gio::SimpleAction::new("new-file", Some(glib::VariantTy::STRING));
@@ -185,6 +191,20 @@ impl Window {
     pub(crate) fn open_files(&self, files: Vec<FileItem>, choose_app: bool) {
         let window = self.gtk_window();
         for item in files {
+            if !choose_app && let Some(p) = item.path() {
+                use kivo_core::install::{self, FileType, appimage};
+                // An AppImage that's already installed runs; others install.
+                if install::file_type(&p) == FileType::AppImage && appimage::is_installed(&appimage::Dirs::user(), &p) {
+                    if let Err(e) = gtk::gio::SubprocessLauncher::new(gtk::gio::SubprocessFlags::NONE).spawn(&[p.as_os_str()]) {
+                        self.toast(&format!("Couldn't start {}: {}", item.name(), e.message()));
+                    }
+                    continue;
+                }
+                if install::is_installable(&p) {
+                    self.install_file(p);
+                    continue;
+                }
+            }
             if !choose_app && looks_like_archive(&item)
                 && let Some(p) = item.path() {
                     self.extract_archive(p, None);

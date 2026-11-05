@@ -32,6 +32,7 @@ pub struct Inner {
     open_btn: gtk::Button,
     open_with_btn: gtk::Button,
     extract_btn: gtk::Button,
+    install_btn: gtk::Button,
     current: RefCell<Option<FileItem>>,
     generation: Cell<u64>,
     anim: RefCell<Option<glib::SourceId>>,
@@ -39,6 +40,7 @@ pub struct Inner {
     navigate: RefCell<Option<Navigate>>,
     on_open: RefCell<Option<OpenFn>>,
     on_extract: RefCell<Option<ExtractFn>>,
+    on_install: RefCell<Option<ExtractFn>>,
     on_hidden: RefCell<Option<Rc<dyn Fn()>>>,
 }
 
@@ -71,12 +73,14 @@ impl QuickLook {
         let open_with_btn = gtk::Button::builder().icon_name("view-more-symbolic").tooltip_text("Open With…").build();
         open_with_btn.update_property(&[gtk::accessible::Property::Label("Open With…")]);
         let extract_btn = gtk::Button::builder().label("Extract").visible(false).build();
+        let install_btn = gtk::Button::builder().label("Install…").visible(false).css_classes(["suggested-action"]).build();
         let open_box = gtk::Box::builder().css_classes(["linked"]).build();
         open_box.append(&open_btn);
         open_box.append(&open_with_btn);
         let header = adw::HeaderBar::builder().title_widget(&title).build();
         header.pack_start(&open_box);
         header.pack_end(&extract_btn);
+        header.pack_end(&install_btn);
         let content = adw::Bin::builder().vexpand(true).hexpand(true).css_classes(["quicklook-content"]).build();
         let tv = adw::ToolbarView::new();
         tv.add_top_bar(&header);
@@ -100,6 +104,7 @@ impl QuickLook {
             open_btn,
             open_with_btn,
             extract_btn,
+            install_btn,
             current: RefCell::new(None),
             generation: Cell::new(0),
             anim: RefCell::new(None),
@@ -107,6 +112,7 @@ impl QuickLook {
             navigate: RefCell::new(None),
             on_open: RefCell::new(None),
             on_extract: RefCell::new(None),
+            on_install: RefCell::new(None),
             on_hidden: RefCell::new(None),
         }));
         ql.wire();
@@ -118,6 +124,10 @@ impl QuickLook {
         *self.0.on_open.borrow_mut() = Some(Rc::new(open));
         *self.0.on_extract.borrow_mut() = Some(Rc::new(extract));
         *self.0.on_hidden.borrow_mut() = Some(Rc::new(hidden));
+    }
+
+    pub fn set_install(&self, f: impl Fn(PathBuf) + 'static) {
+        *self.0.on_install.borrow_mut() = Some(Rc::new(f));
     }
 
     pub fn window(&self) -> adw::Window {
@@ -172,6 +182,17 @@ impl QuickLook {
             let ql = QuickLook(i);
             let path = ql.current().and_then(|c| c.path());
             let cb = ql.0.on_extract.borrow().clone();
+            if let (Some(p), Some(cb)) = (path, cb) {
+                ql.hide();
+                cb(p);
+            }
+        });
+        let weak = Rc::downgrade(&self.0);
+        self.0.install_btn.connect_clicked(move |_| {
+            let Some(i) = weak.upgrade() else { return };
+            let ql = QuickLook(i);
+            let path = ql.current().and_then(|c| c.path());
+            let cb = ql.0.on_install.borrow().clone();
             if let (Some(p), Some(cb)) = (path, cb) {
                 ql.hide();
                 cb(p);
@@ -263,6 +284,8 @@ impl QuickLook {
         });
         self.0.open_with_btn.set_visible(!item.is_dir());
         self.0.extract_btn.set_visible(kind == Kind::Archive);
+        let installable = kind == Kind::Package && path.as_ref().is_some_and(|p| kivo_core::install::is_installable(p));
+        self.0.install_btn.set_visible(installable);
 
         // Show something immediately; replace it when the real preview is ready.
         self.0.content.set_child(Some(&placeholder(item, false)));

@@ -361,6 +361,12 @@ impl Window {
                 }
             },
         );
+        let w5 = self.downgrade();
+        q.set_install(move |path| {
+            if let Some(w) = Window::from_weak(&w5) {
+                w.install_file(path);
+            }
+        });
         *self.0.quicklook.borrow_mut() = Some(q.clone());
         q
     }
@@ -1086,6 +1092,7 @@ fn main_menu() -> gio::Menu {
     s3.append(Some("Reset Zoom"), Some("win.zoom-reset"));
     menu.append_section(None, &s3);
     let s4 = gio::Menu::new();
+    s4.append(Some("Installed Apps…"), Some("win.installed-apps"));
     s4.append(Some("Keyboard Shortcuts"), Some("app.shortcuts"));
     s4.append(Some("About Kivo"), Some("win.about"));
     menu.append_section(None, &s4);

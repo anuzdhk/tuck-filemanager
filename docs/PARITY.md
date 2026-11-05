@@ -5,7 +5,7 @@ Reference: Dolphin (KF6) handbook. This file is updated at the end of every mile
 
 "Tested" here means exercised in the real app through its actions (scripted with `KIVO_ACTIONS`, checked in screenshots) or by unit tests. GTK4 has no public API for synthesizing key presses, so behaviour that only runs on physical key or mouse input is marked 🟡 until it's checked by hand.
 
-_Last updated: Milestone 5 (search)._
+_Last updated: Milestone 6 (Teku app installation)._
 
 The test hooks can now also select items, type into dialogs, answer dialogs, open context menus and simulate drops (`select:`, `type:`, `respond:`, `menu`, `drop-copy:` …; see `crates/kivo/src/debug.rs`).
 
@@ -100,7 +100,10 @@ The test hooks can now also select items, type into dialogs, answer dialogs, ope
 | Quick Look: app packages | 🟡 | Installers (.deb, .rpm, .AppImage, .flatpakref, .exe …) show a large icon and details; the Install button arrives with the Teku integration (Milestone 6) |
 | Quick Look: playback errors | 🟡 | Missing GStreamer plugins show a plain message with what to install. That path is untested, because all plugins are installed here. |
 | Indexed search < 50 ms / 1M files | ✅ | 2–11 ms median on 20 threads; ≤ 45 ms median (49.8 ms max) on 2 threads for the worst case |
-| Teku app installation | ❌ | Milestone 6 |
+| Teku app installation | ✅ | Ported natively from Teku, no external dependency. The file type comes from the contents (deb ar header, RPM lead, AppImage `AI\x01/\x02` marker, `[Flatpak Ref]`, PE/MZ, OLE2 .msi, xar, `koly` trailer), so renamed files can't fool it. The distro comes from `ID` then `ID_LIKE`. Routes and commands match Teku exactly: `pkexec env DEBIAN_FRONTEND=noninteractive apt-get install -y`, `pkexec dnf install -y`, `pkexec zypper --non-interactive install --allow-unsigned-rpm`, `flatpak install --noninteractive --from`. Teku's messages are kept for wrong-distro, fake/corrupt, Windows/macOS, missing Flatpak, and cancelled authentication (pkexec 126/127). Unit-tested: detection for every type, os-release for 9 distros, the routing matrix, commands, history. |
+| Install flow (double-click, right-click › Install…, Quick Look) | 🟡 | One flow: confirm (type, system, method, destination) → live progress with the installer's output (can't be closed mid-install) → done or error with Show Log. Tested in the app: the AppImage install end to end; confirm dialogs for a real .deb and a .flatpakref; refusals for a fake .deb, an .rpm on Ubuntu, and an .exe. A real apt/dnf/zypper/flatpak install wasn't run, because that changes the system and asks for your password. |
+| AppImages | ✅ | Moved to ~/Applications, made executable, name and icon read from the image, menu entry `teku-<id>.desktop` with `X-Teku-AppImage`, the same as Teku, so each can manage the other's installs. Differences: an older AppImage with the same name goes to the Trash instead of being overwritten, Exec paths are escaped, and double-clicking an already-installed AppImage runs it. |
+| Install logs, history, removing AppImages | ✅ | Per-install logs plus `last.log`, and a Teku-format tab-separated history. Main menu › Installed Apps… lists AppImages with Remove (moves the AppImage to the Trash, removes the menu entry and icon) and recent activity. Removal is unit-tested; the Remove button wasn't clicked in the app. |
 | 10 themes + accent colours + user themes | ❌ | Milestone 7. Follows the system light/dark scheme today. |
 | Icon theme: Normal / Material | ❌ | Milestone 7. Uses the system icon theme today. |
 | 100,000-item folders | 🟡 | See `docs/BENCHMARKS.md`. Loads in 0.6–2.3 s; the UI blocks during the final insert. Scrolling is virtualized, but frame times haven't been measured. |

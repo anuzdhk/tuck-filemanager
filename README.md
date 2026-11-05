@@ -2,7 +2,7 @@
 
 A fast, friendly file manager for Linux, written in Rust with GTK4 and libadwaita. It aims for Dolphin's feature set with a macOS Finder-like feel: double-click archive extraction, Quick Look, instant search, and app installation built in (from [Teku](https://github.com/anuzdhk/teku)).
 
-> **Status: early development (Milestones 1–5 of 9: browsing, file operations, archives, Quick Look, search).** See [docs/PARITY.md](docs/PARITY.md) for exactly what works and what is partial or untested, and [docs/PLAN.md](docs/PLAN.md) for the architecture and roadmap.
+> **Status: early development (Milestones 1–6 of 9: browsing, file operations, archives, Quick Look, search, app installation).** See [docs/PARITY.md](docs/PARITY.md) for exactly what works and what is partial or untested, and [docs/PLAN.md](docs/PLAN.md) for the architecture and roadmap.
 
 ## Build
 
@@ -53,9 +53,11 @@ KIVO_ACTIONS="win.view-mode::details;win.split" KIVO_SCREENSHOT=/tmp/shot.png ./
 
 ## Third-party notices
 
+- App installation is ported from [Teku](https://github.com/anuzdhk/teku) by anuzdhk (GPL-3.0-or-later): file-type detection, distro detection, install routes and commands, AppImage menu entries (`teku-*.desktop` with `X-Teku-AppImage`, kept compatible), messages and history format. See `crates/kivo-core/src/install/`.
+
 - `crates/kivo-core/tests/fixtures/tree.rar` comes from the compress-tools crate (MIT OR Apache-2.0). See `crates/kivo-core/tests/fixtures/README.md`.
 - RAR extraction uses the system libarchive (BSD-2-Clause). Password-protected RAR uses the system `unrar` if present; it is not bundled.
 
 ## License
 
-GPL-3.0-or-later (see [LICENSE](LICENSE)). The project includes logic ported from Teku, which is GPL-3.0-or-later.
+GPL-3.0-or-later (see [LICENSE](LICENSE)). Kivo includes code ported from Teku, which is also GPL-3.0-or-later, so the combined work is distributed under GPL-3.0-or-later with full source available.

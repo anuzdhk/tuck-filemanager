@@ -14,6 +14,7 @@ mod search_ui;
 mod searchbar;
 mod thumbs_ui;
 mod info;
+mod install_ui;
 mod item;
 mod pane;
 mod sidebar;

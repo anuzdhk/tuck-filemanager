@@ -7,6 +7,7 @@
 pub mod archive;
 pub mod entry;
 pub mod format;
+pub mod install;
 pub mod group;
 pub mod listing;
 pub mod names;

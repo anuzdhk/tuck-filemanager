@@ -7,6 +7,7 @@ use kivo_core::paths::{UserDir, UserDirs};
 pub struct Selection {
     pub count: usize,
     pub has_archive: bool,
+    pub has_installable: bool,
     pub has_dir: bool,
     pub has_file: bool,
     pub in_trash: bool,
@@ -27,6 +28,9 @@ pub fn item_menu(sel: &Selection) -> gio::Menu {
     }
 
     let open = gio::Menu::new();
+    if sel.has_installable && sel.count == 1 {
+        open.append(Some("_Install…"), Some("win.install"));
+    }
     open.append(Some("_Open"), Some("win.open"));
     if sel.has_dir {
         open.append(Some("Open in New _Tab"), Some("win.open-new-tab"));
