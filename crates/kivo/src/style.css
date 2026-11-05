@@ -29,6 +29,27 @@
   color: var(--accent-fg-color);
 }
 
+.kivo-sidebar .folders-tree {
+  padding: 4px 8px 8px 4px;
+}
+
+.kivo-sidebar .folders-tree > row {
+  min-height: 28px;
+  border-radius: 7px;
+  padding: 0 6px;
+  margin: 0;
+}
+
+.kivo-sidebar .folders-tree > row:selected {
+  background: var(--accent-bg-color);
+  color: var(--accent-fg-color);
+}
+
+.kivo-sidebar .sidebar-switcher button {
+  min-height: 26px;
+  font-size: 0.9em;
+}
+
 .sidebar-heading {
   font-size: 0.8em;
   font-weight: 700;
@@ -343,3 +364,45 @@ window.icons-material gridview > child:selected image:not(.thumbnail) { color: i
 /* ------------------------------------------------------------ focus */
 
 *:focus-visible { outline-color: var(--accent-color); }
+
+/* ---- info panel: rating, tags, comment */
+.info-meta .rating button.star {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 2px;
+  color: var(--kivo-sidebar-dim-fg);
+}
+
+.info-meta .rating button.star.on {
+  color: var(--accent-color);
+}
+
+.tag-chip {
+  background: color-mix(in srgb, var(--accent-bg-color) 18%, transparent);
+  border-radius: 999px;
+  padding: 1px 2px 1px 10px;
+}
+
+.tag-chip button {
+  min-width: 20px;
+  min-height: 20px;
+  padding: 0;
+}
+
+.tag-chips flowboxchild {
+  padding: 0;
+}
+
+/* ---- git status dots */
+.git-badge {
+  min-width: 9px;
+  min-height: 9px;
+  border-radius: 999px;
+  margin: 2px;
+  box-shadow: 0 0 0 2px var(--view-bg-color);
+}
+.git-badge.git-modified { background: var(--warning-color); }
+.git-badge.git-added { background: var(--success-color); }
+.git-badge.git-renamed { background: var(--accent-color); }
+.git-badge.git-deleted, .git-badge.git-conflict { background: var(--error-color); }
+.git-badge.git-untracked { background: var(--kivo-sidebar-dim-fg); }

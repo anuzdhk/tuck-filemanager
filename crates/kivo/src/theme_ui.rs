@@ -13,6 +13,8 @@ use kivo_core::paths::{self, UserDir, UserDirs};
 use kivo_core::settings::{AppSettings, Density, IconStyle, load_json, save_json};
 use kivo_core::theme::{self, Palette, Theme};
 
+const APP_ICON: &str = include_str!("../../../data/icons/app/io.github.anuzdhk.Kivo.svg");
+
 mod embedded {
     include!(concat!(env!("OUT_DIR"), "/icons.rs"));
 }
@@ -54,6 +56,9 @@ pub const UI_ICONS: &[(&str, &str, &str)] = &[
     ("folder", "folder", "folder"),
     ("file", "file", "draft"),
     ("preferences", "adjustments", "tune"),
+    ("star", "star", "star"),
+    ("star-filled", "star-filled", "star-fill"),
+    ("tag", "tag", "sell"),
 ];
 
 /// Material file-type icons (shown at file size, tinted with the accent).
@@ -293,6 +298,11 @@ fn write_ui_icons(st: &mut State) {
         if let Some(svg) = find(embedded::MATERIAL, mat) {
             let _ = std::fs::write(actions.join(format!("kivo-m-file-{kind}-symbolic.svg")), svg);
         }
+    }
+    // The app icon, so windows and About show it even when not installed.
+    let apps = dir.join("hicolor").join("scalable").join("apps");
+    if std::fs::create_dir_all(&apps).is_ok() {
+        let _ = std::fs::write(apps.join(format!("{}.svg", crate::APP_ID)), APP_ICON);
     }
     let mut search = vec![dir];
     search.extend(st.default_search.iter().cloned());

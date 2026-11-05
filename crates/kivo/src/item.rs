@@ -51,6 +51,8 @@ mod imp {
         /// Search relevance (higher is better).
         pub score: Cell<i32>,
         pub in_content: Cell<bool>,
+        /// Git state, once the folder's status is known.
+        pub git: Cell<Option<kivo_core::git::State>>,
     }
 
     #[glib::object_subclass]
@@ -187,6 +189,14 @@ impl FileItem {
 
     pub fn is_hidden(&self) -> bool {
         self.imp().hidden.get()
+    }
+
+    pub fn git(&self) -> Option<kivo_core::git::State> {
+        self.imp().git.get()
+    }
+
+    pub fn set_git(&self, s: Option<kivo_core::git::State>) {
+        self.imp().git.set(s);
     }
 
     pub fn is_symlink(&self) -> bool {

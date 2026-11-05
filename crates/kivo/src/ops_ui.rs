@@ -117,6 +117,18 @@ impl Window {
         });
         add("installed-apps", |w| w.show_installed_apps());
 
+        add("move-to", |w| w.op_transfer_to(true));
+        add("copy-to", |w| w.op_transfer_to(false));
+        let a = gio::SimpleAction::new("service-action", Some(glib::VariantTy::UINT32));
+        let weak = self.downgrade();
+        a.connect_activate(move |_, v| {
+            let (Some(w), Some(i)) = (Window::from_weak(&weak), v.and_then(|v| v.get::<u32>())) else { return };
+            let cwd = w.active_pane().and_then(|p| p.path());
+            if let Err(e) = crate::services_ui::run(i, &w.selection(), cwd.as_deref()) {
+                w.toast(&e);
+            }
+        });
+        self.gtk_window().add_action(&a);
         // New file: target is a template name, or "" for an empty file.
         let a = gio::SimpleAction::new("new-file", Some(glib::VariantTy::STRING));
         let weak = self.downgrade();
@@ -126,6 +138,28 @@ impl Window {
             }
         });
         self.gtk_window().add_action(&a);
+    }
+
+    /// Move To… / Copy To…: pick a folder, then transfer like a drop.
+    fn op_transfer_to(&self, moving: bool) {
+        let files: Vec<gio::File> = self.selection().iter().map(|i| i.file()).collect();
+        if files.is_empty() {
+            return;
+        }
+        let dialog = gtk::FileDialog::builder()
+            .title(if moving { "Move To" } else { "Copy To" })
+            .accept_label(if moving { "Move Here" } else { "Copy Here" })
+            .modal(true)
+            .build();
+        if let Some(loc) = self.active_pane().map(|p| p.location()) {
+            dialog.set_initial_folder(Some(&loc));
+        }
+        let weak = self.downgrade();
+        dialog.select_folder(Some(&self.gtk_window()), gio::Cancellable::NONE, move |res| {
+            let (Some(w), Ok(dest)) = (Window::from_weak(&weak), res) else { return };
+            let action = if moving { gdk::DragAction::MOVE } else { gdk::DragAction::COPY };
+            w.handle_drop(files, dest, action);
+        });
     }
 
     fn selection(&self) -> Vec<FileItem> {

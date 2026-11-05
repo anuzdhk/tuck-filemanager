@@ -498,6 +498,7 @@ impl Pane {
             match result {
                 Ok(()) => {
                     pane.start_monitor(&file);
+                    pane.refresh_git();
                     if std::env::var_os("KIVO_DEBUG_TIMING").is_some() {
                         eprintln!(
                             "listed {} items in {:?}",
@@ -759,6 +760,30 @@ impl Pane {
     }
 
     // ------------------------------------------------------- live updates
+
+    /// Fetch the folder's git status off the main thread and badge items.
+    fn refresh_git(&self) {
+        let Some(dir) = self.location().path() else { return };
+        let weak = self.downgrade();
+        glib::MainContext::default().spawn_local(async move {
+            let d = dir.clone();
+            let Ok(Some(st)) = gio::spawn_blocking(move || kivo_core::git::status(&d)).await else { return };
+            let Some(pane) = Pane::from_weak(&weak) else { return };
+            if pane.location().path().as_deref() != Some(dir.as_path()) {
+                return;
+            }
+            let store = pane.store();
+            for i in 0..store.n_items() {
+                if let Some(item) = store.item(i).and_downcast::<FileItem>()
+                    && let Some(p) = item.file().path() {
+                        item.set_git(Some(st.state_of(&p)));
+                    }
+            }
+            for w in [pane.0.icons.upcast_ref::<gtk::Widget>(), pane.0.compact.upcast_ref(), pane.0.details.upcast_ref()] {
+                refresh_git_badges(w);
+            }
+        });
+    }
 
     fn start_monitor(&self, dir: &gio::File) {
         let Ok(monitor) =
@@ -1214,6 +1239,7 @@ impl Pane {
                     has_dir: sel.iter().any(|i| i.is_dir()),
                     has_file: sel.iter().any(|i| !i.is_dir()),
                     in_trash: self.in_trash(),
+                    services: if self.in_trash() { Vec::new() } else { crate::services_ui::applicable(&sel) },
                 })
             }
             None => {
@@ -1536,6 +1562,7 @@ impl Pane {
                 .visible(false)
                 .build();
             let overlay = gtk::Overlay::builder().child(&image).halign(gtk::Align::Center).build();
+            overlay.add_overlay(&git_badge(gtk::Align::Start, gtk::Align::End));
             overlay.add_overlay(&emblem);
             let label = gtk::Label::builder()
                 .wrap(true)
@@ -1579,6 +1606,9 @@ impl Pane {
                 crate::thumbs_ui::apply(&image, &item, size as u32);
             }
             emblem.set_visible(item.is_symlink());
+            if let Some(b) = emblem.prev_sibling() {
+                bind_git(&b, &item);
+            }
             label.set_label(&item.name());
             tile.set_tooltip_text(Some(&item.name()));
         });
@@ -1601,6 +1631,7 @@ impl Pane {
             let row = gtk::Box::builder().spacing(8).css_classes(["tile", "compact-tile"]).build();
             row.append(&image);
             row.append(&label);
+            row.append(&git_badge(gtk::Align::Center, gtk::Align::Center));
             if let Some(p) = Pane::from_weak(&weak_compact) {
                 p.setup_drag_source(row.upcast_ref());
             }
@@ -1611,8 +1642,11 @@ impl Pane {
             let Some(item) = li.item().and_downcast::<FileItem>() else { return };
             let Some(row) = li.child() else { return };
             let image = row.first_child().and_downcast::<gtk::Image>().expect("image");
-            let label = row.last_child().and_downcast::<gtk::Label>().expect("label");
+            let label = image.next_sibling().and_downcast::<gtk::Label>().expect("label");
             bind_item(&row, &item);
+            if let Some(b) = row.last_child() {
+                bind_git(&b, &item);
+            }
             image.set_from_gicon(&item.icon());
             crate::thumbs_ui::reset(&image);
             if previews && csize >= 32 {
@@ -1715,6 +1749,52 @@ fn same_device(a: &std::path::Path, b: &std::path::Path) -> bool {
 }
 
 /// Tag a cell widget with its item, for middle-click lookup.
+/// A small coloured dot showing an item's git state.
+fn git_badge(h: gtk::Align, v: gtk::Align) -> gtk::Widget {
+    let b = gtk::Box::builder().css_classes(["git-badge"]).halign(h).valign(v).visible(false).build();
+    b.upcast()
+}
+
+const GIT_CLASSES: &[&str] = &["git-untracked", "git-renamed", "git-added", "git-deleted", "git-modified", "git-conflict"];
+
+fn bind_git(badge: &gtk::Widget, item: &FileItem) {
+    for c in GIT_CLASSES {
+        badge.remove_css_class(c);
+    }
+    match item.git().filter(|s| *s != kivo_core::git::State::Clean) {
+        Some(s) => {
+            badge.add_css_class(&format!("git-{}", s.id()));
+            badge.set_tooltip_text(Some(&format!("Git: {}", s.label())));
+            badge.update_property(&[gtk::accessible::Property::Label(&format!("Git: {}", s.label()))]);
+            badge.set_visible(true);
+        }
+        None => badge.set_visible(false),
+    }
+}
+
+/// Re-apply git badges on the cells that are on screen.
+fn refresh_git_badges(w: &gtk::Widget) {
+    if w.has_css_class("git-badge") {
+        let mut a = w.parent();
+        while let Some(p) = a {
+            // SAFETY: only ever set to WeakRef<FileItem> in bind_item.
+            if let Some(item) = unsafe { p.data::<glib::WeakRef<FileItem>>("kivo-item") } {
+                if let Some(item) = unsafe { item.as_ref() }.upgrade() {
+                    bind_git(w, &item);
+                }
+                break;
+            }
+            a = p.parent();
+        }
+        return;
+    }
+    let mut c = w.first_child();
+    while let Some(ch) = c {
+        refresh_git_badges(&ch);
+        c = ch.next_sibling();
+    }
+}
+
 fn bind_item(widget: &gtk::Widget, item: &FileItem) {
     // SAFETY: the key is only ever read back as WeakRef<FileItem>.
     unsafe {
@@ -1741,6 +1821,7 @@ fn name_column_factory(size: i32, pane: Weak<Inner>) -> gtk::SignalListItemFacto
         let b = gtk::Box::builder().spacing(8).build();
         b.append(&image);
         b.append(&label);
+        b.append(&git_badge(gtk::Align::Center, gtk::Align::Center));
         if let Some(p) = Pane::from_weak(&pane) {
             p.setup_drag_source(b.upcast_ref());
         }
@@ -1757,8 +1838,11 @@ fn name_column_factory(size: i32, pane: Weak<Inner>) -> gtk::SignalListItemFacto
         expander.set_list_row(row.as_ref());
         let b = expander.child().expect("box");
         let image = b.first_child().and_downcast::<gtk::Image>().expect("image");
-        let label = b.last_child().and_downcast::<gtk::Label>().expect("label");
+        let label = image.next_sibling().and_downcast::<gtk::Label>().expect("label");
         bind_item(&b, &item);
+        if let Some(g) = b.last_child() {
+            bind_git(&g, &item);
+        }
         image.set_from_gicon(&item.icon());
         label.set_label(&item.name());
     });

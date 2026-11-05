@@ -15,10 +15,13 @@ enum Target {
     File(gio::File),
     /// An unmounted volume; activating it mounts it first.
     Volume(gio::Volume),
+    /// A tag: activating it searches for files with it.
+    Tag(String),
 }
 
 type OnOpen = Rc<dyn Fn(gio::File)>;
 type OnMessage = Rc<dyn Fn(String)>;
+type OnTag = Rc<dyn Fn(String)>;
 
 pub struct Inner {
     root: gtk::Box,
@@ -29,8 +32,13 @@ pub struct Inner {
     storage_value: gtk::Label,
     storage_bar: gtk::LevelBar,
     storage_detail: gtk::Label,
+    stack: gtk::Stack,
+    folders: crate::folders_ui::FoldersPanel,
+    folders_button: gtk::ToggleButton,
     on_open: RefCell<Option<OnOpen>>,
     on_message: RefCell<Option<OnMessage>>,
+    on_tag: RefCell<Option<OnTag>>,
+    tags: RefCell<Vec<String>>,
     current: RefCell<Option<gio::File>>,
 }
 
@@ -73,7 +81,18 @@ impl Sidebar {
             .orientation(gtk::Orientation::Vertical)
             .css_classes(["kivo-sidebar"])
             .build();
-        root.append(&scroller);
+        // Places, or the Folders tree (F7).
+        let folders = crate::folders_ui::FoldersPanel::new();
+        let stack = gtk::Stack::builder().vexpand(true).transition_type(gtk::StackTransitionType::Crossfade).build();
+        stack.add_named(&scroller, Some("places"));
+        stack.add_named(&folders.widget(), Some("folders"));
+        let places_button = gtk::ToggleButton::builder().label("Places").active(true).hexpand(true).build();
+        let folders_button = gtk::ToggleButton::builder().label("Folders").group(&places_button).hexpand(true).tooltip_text("Folders (F7)").build();
+        let switcher = gtk::Box::builder().css_classes(["linked", "sidebar-switcher"]).margin_start(12).margin_end(12).margin_bottom(6).build();
+        switcher.append(&places_button);
+        switcher.append(&folders_button);
+        root.append(&switcher);
+        root.append(&stack);
         root.append(&storage);
 
         let sb = Sidebar(Rc::new(Inner {
@@ -85,10 +104,32 @@ impl Sidebar {
             storage_value,
             storage_bar,
             storage_detail,
+            stack,
+            folders,
+            folders_button: folders_button.clone(),
             on_open: RefCell::new(None),
             on_message: RefCell::new(None),
+            on_tag: RefCell::new(None),
+            tags: RefCell::new(crate::search_ui::all_tags()),
             current: RefCell::new(None),
         }));
+        let weak = Rc::downgrade(&sb.0);
+        folders_button.connect_toggled(move |b| {
+            let Some(i) = weak.upgrade() else { return };
+            i.stack.set_visible_child_name(if b.is_active() { "folders" } else { "places" });
+            if b.is_active() {
+                let cur = i.current.borrow().clone();
+                if let Some(f) = cur {
+                    i.folders.reveal(&f);
+                }
+            }
+        });
+        let weak = Rc::downgrade(&sb.0);
+        sb.0.folders.connect_open(move |f| {
+            if let Some(i) = weak.upgrade() {
+                Sidebar(i).open(f);
+            }
+        });
         sb.wire();
         sb.rebuild();
         sb.refresh_storage();
@@ -101,6 +142,10 @@ impl Sidebar {
 
     pub fn connect_open(&self, f: impl Fn(gio::File) + 'static) {
         *self.0.on_open.borrow_mut() = Some(Rc::new(f));
+    }
+
+    pub fn connect_tag(&self, f: impl Fn(String) + 'static) {
+        *self.0.on_tag.borrow_mut() = Some(Rc::new(f));
     }
 
     pub fn connect_message(&self, f: impl Fn(String) + 'static) {
@@ -130,6 +175,12 @@ impl Sidebar {
             match target {
                 Some(Target::File(f)) => sb.open(f),
                 Some(Target::Volume(v)) => sb.mount(v),
+                Some(Target::Tag(t)) => {
+                    let cb = sb.0.on_tag.borrow().clone();
+                    if let Some(cb) = cb {
+                        cb(t);
+                    }
+                }
                 None => {}
             }
         });
@@ -147,6 +198,17 @@ impl Sidebar {
         self.0.monitor.connect_volume_added(move |_, _| r());
         let r = refresh;
         self.0.monitor.connect_volume_removed(move |_, _| r());
+        // Tags come from the search index, which refreshes in the background.
+        let weak = Rc::downgrade(&self.0);
+        glib::timeout_add_seconds_local(4, move || {
+            let Some(inner) = weak.upgrade() else { return glib::ControlFlow::Break };
+            let now = crate::search_ui::all_tags();
+            if *inner.tags.borrow() != now {
+                *inner.tags.borrow_mut() = now;
+                Sidebar(inner).rebuild();
+            }
+            glib::ControlFlow::Continue
+        });
     }
 
     pub fn rebuild_public(&self) {
@@ -198,6 +260,14 @@ impl Sidebar {
             self.heading(&mut rows, "Devices");
             for (name, icon, target, mount) in devices {
                 self.place(&mut rows, &name, &icon, target, mount);
+            }
+        }
+
+        let tags = self.0.tags.borrow().clone();
+        if !tags.is_empty() {
+            self.heading(&mut rows, "Tags");
+            for t in tags {
+                self.place(&mut rows, &t, "kivo-tag-symbolic", Target::Tag(t.clone()), None);
             }
         }
 
@@ -254,9 +324,25 @@ impl Sidebar {
         rows.push((row, Some(target)));
     }
 
+    /// Switch between Places and the Folders tree.
+    pub fn toggle_folders(&self) {
+        let b = &self.0.folders_button;
+        if b.is_active() {
+            let places = self.0.root.first_child().and_then(|sw| sw.first_child()).and_downcast::<gtk::ToggleButton>();
+            if let Some(p) = places {
+                p.set_active(true);
+            }
+        } else {
+            b.set_active(true);
+        }
+    }
+
     /// Highlight the row for `file`, if it has one.
     pub fn set_location(&self, file: &gio::File) {
         *self.0.current.borrow_mut() = Some(file.clone());
+        if self.0.folders_button.is_active() {
+            self.0.folders.reveal(file);
+        }
         let rows = self.0.rows.borrow();
         let hit = rows.iter().find(|(_, t)| matches!(t, Some(Target::File(f)) if f.equal(file)));
         match hit {

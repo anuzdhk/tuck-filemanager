@@ -65,6 +65,7 @@ pub struct Inner {
     syncing: Cell<bool>,
     jobs: Jobs,
     quicklook: RefCell<Option<crate::quicklook::QuickLook>>,
+    terminal: crate::terminal_ui::TerminalPanel,
     search: crate::searchbar::SearchBar,
     search_gen: Cell<u64>,
     search_cancel: RefCell<kivo_core::ops::Cancel>,
@@ -92,7 +93,10 @@ impl Window {
 
         // ---- sidebar column
         let sidebar = Sidebar::new();
-        let brand = gtk::Label::builder().label("Kivo").css_classes(["brand"]).build();
+        let brand_label = gtk::Label::builder().label("Kivo").css_classes(["brand"]).build();
+        let brand = gtk::Box::builder().spacing(8).build();
+        brand.append(&gtk::Image::builder().icon_name(crate::APP_ID).pixel_size(22).build());
+        brand.append(&brand_label);
         let sidebar_header = adw::HeaderBar::builder()
             .show_end_title_buttons(false)
             .title_widget(&brand)
@@ -177,10 +181,21 @@ impl Window {
         new_tab.add_css_class("flat");
         tab_bar.set_end_action_widget(Some(&new_tab));
         let info = InfoPanel::new();
+        // Terminal below the files (F4), resizable.
+        let terminal = crate::terminal_ui::TerminalPanel::new();
+        let files_and_term = gtk::Paned::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .start_child(&tab_view)
+            .end_child(&terminal.widget())
+            .resize_start_child(true)
+            .resize_end_child(false)
+            .shrink_end_child(false)
+            .wide_handle(false)
+            .build();
         let info_split = adw::OverlaySplitView::builder()
             .sidebar_position(gtk::PackType::End)
             .sidebar(&info.widget())
-            .content(&tab_view)
+            .content(&files_and_term)
             .min_sidebar_width(240.0)
             .max_sidebar_width(320.0)
             .sidebar_width_fraction(0.24)
@@ -260,6 +275,7 @@ impl Window {
             syncing: Cell::new(false),
             jobs,
             quicklook: RefCell::new(None),
+            terminal,
             search,
             search_gen: Cell::new(0),
             search_cancel: RefCell::new(kivo_core::ops::Cancel::new()),
@@ -274,6 +290,15 @@ impl Window {
             let action = if action.is_empty() { gdk::DragAction::COPY } else { action };
             w.handle_drop(list.files(), tab.active().location(), action);
             true
+        });
+        let weak = win.downgrade();
+        win.0.terminal.connect_dir_changed(move |dir| {
+            // `cd` in the terminal moves the file view along.
+            let Some(w) = Window::from_weak(&weak) else { return };
+            if let Some(p) = w.active_pane()
+                && p.location().path().as_deref() != Some(dir.as_path()) {
+                    p.navigate(gio::File::for_path(dir));
+                }
         });
         let weak = win.downgrade();
         win.0.search.connect_changed(move || {
@@ -331,6 +356,7 @@ impl Window {
         for c in crate::theme_ui::window_classes() {
             win.add_css_class(c);
         }
+        self.0.terminal.apply_colors();
     }
 
     /// Rebuild file views so they pick up a new icon style or accent.
@@ -352,6 +378,10 @@ impl Window {
     /// The Kivo window behind a GTK window (used by test hooks).
     pub fn find(w: &gtk::Window) -> Option<Window> {
         WINDOWS.with(|list| list.borrow().iter().find(|x| x.0.window.upcast_ref::<gtk::Window>() == w).cloned())
+    }
+
+    pub(crate) fn terminal(&self) -> &crate::terminal_ui::TerminalPanel {
+        &self.0.terminal
     }
 
     pub(crate) fn gtk_window(&self) -> adw::ApplicationWindow {
@@ -729,6 +759,9 @@ impl Window {
         self.0.back.set_sensitive(pane.can_go_back());
         self.0.forward.set_sensitive(pane.can_go_forward());
         self.0.up.set_sensitive(pane.can_go_up());
+        if let Some(dir) = loc.path() {
+            self.0.terminal.follow(&dir);
+        }
         let split = self.current_tab().is_some_and(|t| t.right.borrow().is_some());
         if let Some(a) = self.action("split") {
             a.set_state(&split.to_variant());
@@ -820,6 +853,18 @@ impl Window {
             }
         }));
         add("toggle-sidebar", Box::new(|w| w.0.outer.set_show_sidebar(!w.0.outer.shows_sidebar())));
+        add("toggle-folders", Box::new(|w| {
+            w.0.outer.set_show_sidebar(true);
+            w.0.sidebar.toggle_folders();
+        }));
+        add("toggle-terminal", Box::new(|w| {
+            let dir = w.active_pane().and_then(|p| p.location().path());
+            let was_open = w.0.terminal.is_open();
+            w.0.terminal.toggle(dir.as_deref());
+            if was_open && let Some(p) = w.active_pane() {
+                p.focus_view();
+            }
+        }));
         add("toggle-info", Box::new(|w| w.0.info_split.set_show_sidebar(!w.0.info_split.shows_sidebar())));
         add("apply-view-to-all", Box::new(|w| {
             if let Some(p) = w.active_pane() {
@@ -944,6 +989,15 @@ impl Window {
                 if w.0.outer.is_collapsed() {
                     w.0.outer.set_show_sidebar(false);
                 }
+            }
+        });
+        let weak = self.downgrade();
+        self.0.sidebar.connect_tag(move |t| {
+            // Files with this tag, anywhere in the index.
+            if let Some(w) = Window::from_weak(&weak) {
+                w.0.search.set_everywhere(true);
+                w.0.search.open();
+                w.0.search.entry.set_text(&format!("tag:{t}"));
             }
         });
         let weak = self.downgrade();
@@ -1091,7 +1145,7 @@ impl Window {
     fn show_about(&self) {
         let about = adw::AboutDialog::builder()
             .application_name("Kivo")
-            .application_icon("system-file-manager")
+            .application_icon(crate::APP_ID)
             .version(env!("CARGO_PKG_VERSION"))
             .developer_name("anuzdhk")
             .license_type(gtk::License::Gpl30)
@@ -1127,6 +1181,10 @@ fn main_menu() -> gio::Menu {
     s3.append(Some("Zoom Out"), Some("win.zoom-out"));
     s3.append(Some("Reset Zoom"), Some("win.zoom-reset"));
     menu.append_section(None, &s3);
+    let panels = gio::Menu::new();
+    panels.append(Some("Folders Panel"), Some("win.toggle-folders"));
+    panels.append(Some("Terminal Panel"), Some("win.toggle-terminal"));
+    menu.append_section(None, &panels);
     let s4 = gio::Menu::new();
     s4.append(Some("_Preferences"), Some("app.preferences"));
     s4.append(Some("Installed Apps…"), Some("win.installed-apps"));

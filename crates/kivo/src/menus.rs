@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Context menus. Common actions sit at the top level, never buried.
 
-use gtk::gio;
+use gtk::{gio, glib};
 use kivo_core::paths::{UserDir, UserDirs};
 
 pub struct Selection {
@@ -11,6 +11,8 @@ pub struct Selection {
     pub has_dir: bool,
     pub has_file: bool,
     pub in_trash: bool,
+    /// Dolphin service-menu actions that apply.
+    pub services: Vec<crate::services_ui::Entry>,
 }
 
 /// Menu for right-clicking one or more items.
@@ -56,6 +58,8 @@ pub fn item_menu(sel: &Selection) -> gio::Menu {
     manage.append(Some("Co_mpress…"), Some("win.compress"));
     manage.append(Some("_Duplicate"), Some("win.duplicate"));
     manage.append(Some("Create _Link"), Some("win.link"));
+    manage.append(Some("_Move To…"), Some("win.move-to"));
+    manage.append(Some("Cop_y To…"), Some("win.copy-to"));
     manage.append(Some("Move to T_rash"), Some("win.trash"));
     manage.append(Some("_Delete Permanently…"), Some("win.delete"));
     menu.append_section(None, &manage);
@@ -66,6 +70,31 @@ pub fn item_menu(sel: &Selection) -> gio::Menu {
         more.append(Some("Open in T_erminal"), Some("win.open-terminal-here"));
     }
     menu.append_section(None, &more);
+
+    if !sel.services.is_empty() {
+        // Service menus: grouped into their submenus, like Dolphin.
+        let section = gio::Menu::new();
+        let mut subs: Vec<(String, gio::Menu)> = Vec::new();
+        for (sub, label, idx) in &sel.services {
+            let item = gio::MenuItem::new(Some(label), None);
+            item.set_action_and_target_value(Some("win.service-action"), Some(&glib::Variant::from(*idx)));
+            match sub {
+                Some(name) => match subs.iter().find(|(n, _)| n == name) {
+                    Some((_, m)) => m.append_item(&item),
+                    None => {
+                        let m = gio::Menu::new();
+                        m.append_item(&item);
+                        subs.push((name.clone(), m));
+                    }
+                },
+                None => section.append_item(&item),
+            }
+        }
+        for (name, m) in subs {
+            section.append_submenu(Some(&name), &m);
+        }
+        menu.append_section(None, &section);
+    }
 
     let props = gio::Menu::new();
     props.append(Some("P_roperties"), Some("win.properties"));

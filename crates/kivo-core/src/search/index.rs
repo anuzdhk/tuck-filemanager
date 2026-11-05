@@ -10,7 +10,7 @@
 //! changed keeps its file list from the old index without being read again,
 //! so a refresh costs one `stat` per folder rather than one per file.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{self, BufWriter, Read, Write};
 use std::os::unix::ffi::OsStrExt;
@@ -151,6 +151,14 @@ impl Index {
     }
 
     /// Entry for an absolute path, if indexed.
+    /// Every tag in use, sorted, each once.
+    pub fn all_tags(&self) -> Vec<String> {
+        let mut all: Vec<String> = self.tags.iter().flat_map(|(_, t)| t.split(',')).filter(|t| !t.is_empty()).map(String::from).collect();
+        all.sort();
+        all.dedup();
+        all
+    }
+
     pub fn find(&self, path: &Path) -> Option<u32> {
         let roots: Vec<u32> = (0..self.len() as u32).filter(|&i| self.parent[i as usize] == NONE).collect();
         for r in roots {
@@ -469,6 +477,12 @@ pub struct CrawlStats {
 /// Build an index of `roots`, staying on each root's file system. With `old`,
 /// folders whose mtime hasn't changed reuse their old file list.
 pub fn crawl(roots: &[PathBuf], old: Option<&Index>, cancel: &Cancel) -> (Index, CrawlStats) {
+    crawl_with(roots, old, &HashSet::new(), cancel)
+}
+
+/// Like [`crawl`], but folders in `force` are always read again — for
+/// changes that don't touch a folder's mtime, such as new tags on a file.
+pub fn crawl_with(roots: &[PathBuf], old: Option<&Index>, force: &HashSet<PathBuf>, cancel: &Cancel) -> (Index, CrawlStats) {
     let mut b = Builder::new();
     let mut stats = CrawlStats { dirs_read: 0, dirs_reused: 0, entries: 0 };
     for root in roots {
@@ -478,14 +492,14 @@ pub fn crawl(roots: &[PathBuf], old: Option<&Index>, cancel: &Cancel) -> (Index,
         }
         let id = b.push(NONE, root.as_os_str().as_bytes(), true, 0, m.mtime(), false, 0, None);
         let old_id = old.and_then(|o| o.find(root));
-        walk(&mut b, old, root, id, old_id, m.mtime(), m.dev(), 1, false, &mut stats, cancel);
+        walk(&mut b, old, force, root, id, old_id, m.mtime(), m.dev(), 1, false, &mut stats, cancel);
     }
     stats.entries = b.idx.len() as u64;
     (b.finish(), stats)
 }
 
 #[allow(clippy::too_many_arguments)]
-fn walk(b: &mut Builder, old: Option<&Index>, dir: &Path, id: u32, old_id: Option<u32>, dir_mtime: i64, dev: u64, depth: u16, hidden: bool, stats: &mut CrawlStats, cancel: &Cancel) {
+fn walk(b: &mut Builder, old: Option<&Index>, force: &HashSet<PathBuf>, dir: &Path, id: u32, old_id: Option<u32>, dir_mtime: i64, dev: u64, depth: u16, hidden: bool, stats: &mut CrawlStats, cancel: &Cancel) {
     if cancel.is_cancelled() {
         return;
     }
@@ -493,6 +507,7 @@ fn walk(b: &mut Builder, old: Option<&Index>, dir: &Path, id: u32, old_id: Optio
     if let (Some(o), Some(oid)) = (old, old_id)
         && o.mtime[oid as usize] == dir_mtime
         && o.is_dir(oid)
+        && !force.contains(dir)
     {
         {
             stats.dirs_reused += 1;
@@ -508,7 +523,7 @@ fn walk(b: &mut Builder, old: Option<&Index>, dir: &Path, id: u32, old_id: Optio
                     let tags = o.tags.binary_search_by_key(&c, |(i, _)| *i).ok().map(|pos| o.tags[pos].1.clone());
                     let cid = b.push(id, &name, true, 0, m.mtime(), child_hidden, depth, tags);
                     if m.dev() == dev && !skip_contents(&p, &name) {
-                        walk(b, old, &p, cid, Some(c), m.mtime(), dev, depth + 1, child_hidden, stats, cancel);
+                        walk(b, old, force, &p, cid, Some(c), m.mtime(), dev, depth + 1, child_hidden, stats, cancel);
                     }
                 } else {
                     let tags = o.tags.binary_search_by_key(&c, |(i, _)| *i).ok().map(|pos| o.tags[pos].1.clone());
@@ -544,7 +559,7 @@ fn walk(b: &mut Builder, old: Option<&Index>, dir: &Path, id: u32, old_id: Optio
     };
     for (p, cid, mt) in subdirs {
         let old_child = p.file_name().and_then(|n| old_kids.get(n.as_bytes()).copied());
-        walk(b, old, &p, cid, old_child, mt, dev, depth + 1, hidden || p.file_name().is_some_and(|n| n.as_bytes().first() == Some(&b'.')), stats, cancel);
+        walk(b, old, force, &p, cid, old_child, mt, dev, depth + 1, hidden || p.file_name().is_some_and(|n| n.as_bytes().first() == Some(&b'.')), stats, cancel);
     }
 }
 
@@ -693,6 +708,10 @@ mod tests {
         fs::write(d.path().join("Documents/new-report.md"), "x").unwrap();
         fs::remove_file(d.path().join("Documents/myreport.txt")).unwrap();
         let (fresh, third) = crawl(&[d.path().to_path_buf()], Some(&same), &Cancel::new());
+        // A forced folder is read again even though its mtime is unchanged.
+        let force: HashSet<PathBuf> = [d.path().to_path_buf()].into();
+        let (_, forced) = crawl_with(&[d.path().to_path_buf()], Some(&fresh), &force, &Cancel::new());
+        assert!(forced.dirs_read >= 1);
         assert_eq!(third.dirs_read, 1, "only Documents re-read");
         let now = chrono::Local::now().timestamp();
         let n = names(&fresh, &fresh.search(&Query::parse("report", d.path()), 50, now));

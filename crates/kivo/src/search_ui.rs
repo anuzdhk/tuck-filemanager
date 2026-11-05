@@ -29,6 +29,8 @@ struct Shared {
     state: AtomicU8,
     entries: AtomicU64,
     nudge: Mutex<Option<mpsc::Sender<()>>>,
+    /// Folders to read again on the next crawl (e.g. a file got new tags).
+    force: Mutex<std::collections::HashSet<PathBuf>>,
 }
 
 fn shared() -> &'static Shared {
@@ -39,6 +41,7 @@ fn shared() -> &'static Shared {
         state: AtomicU8::new(State::Starting as u8),
         entries: AtomicU64::new(0),
         nudge: Mutex::new(None),
+        force: Mutex::new(Default::default()),
     })
 }
 
@@ -82,7 +85,8 @@ pub fn start() {
                     s.state.store(State::Indexing as u8, Ordering::Relaxed);
                 }
                 let old = s.names.lock().expect("lock").clone();
-                let (fresh, _) = index::crawl(&roots(), old.as_deref(), &Cancel::new());
+                let force = std::mem::take(&mut *s.force.lock().expect("lock"));
+                let (fresh, _) = index::crawl_with(&roots(), old.as_deref(), &force, &Cancel::new());
                 let fresh = Arc::new(fresh);
                 s.entries.store(fresh.len() as u64, Ordering::Relaxed);
                 *s.names.lock().expect("lock") = Some(fresh.clone());
@@ -103,6 +107,19 @@ pub fn start() {
             }
         })
         .expect("spawn indexer");
+}
+
+/// Every tag used by indexed files.
+pub fn all_tags() -> Vec<String> {
+    shared().names.lock().expect("lock").as_ref().map(|i| i.all_tags()).unwrap_or_default()
+}
+
+/// `path`'s tags changed (its folder's mtime didn't): re-read it soon.
+pub fn tags_changed(path: &Path) {
+    if let Some(dir) = path.parent() {
+        shared().force.lock().expect("lock").insert(dir.to_path_buf());
+    }
+    nudge();
 }
 
 /// Something changed on disk (copy, move, rename…): refresh soon.

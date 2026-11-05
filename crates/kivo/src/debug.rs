@@ -139,6 +139,13 @@ fn step_once(app: &adw::Application, s: &str) {
         }
         return;
     }
+    if let Some(text) = s.strip_prefix("term:") {
+        // Type into the terminal panel; "\\n" ends a command.
+        if let Some(w) = win.as_ref().and_then(crate::window::Window::find) {
+            w.terminal().type_text(&text.replace("\\n", "\r"));
+        }
+        return;
+    }
     if let Some(text) = s.strip_prefix("type:") {
         // The focused widget may be the GtkText inside an entry.
         let focus = win.as_ref().and_then(gtk::prelude::GtkWindowExt::focus).or_else(|| {

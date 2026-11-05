@@ -28,5 +28,6 @@ zip = "9.3.0"
 zstd = "0.14.3"
 
 [dev-dependencies]
+resvg = "0.49.0"
 tempfile.workspace = true
 usvg = "0.49.0"

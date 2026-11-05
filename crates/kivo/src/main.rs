@@ -12,9 +12,12 @@ mod properties;
 mod quicklook;
 mod search_ui;
 mod searchbar;
+mod services_ui;
+mod terminal_ui;
 mod theme_ui;
 mod thumbs_ui;
 mod prefs;
+mod folders_ui;
 mod info;
 mod install_ui;
 mod item;
@@ -66,6 +69,8 @@ pub const SHORTCUTS: &[(&str, &[&str], &str, &str)] = &[
     ("win.show-hidden", &["<Ctrl>h", "<Alt>period"], "View", "Show hidden files"),
     ("win.toggle-sidebar", &["F9"], "View", "Show sidebar"),
     ("win.toggle-info", &["F11"], "View", "Show information panel"),
+    ("win.toggle-terminal", &["F4"], "View", "Show terminal panel"),
+    ("win.toggle-folders", &["F7"], "View", "Show folders panel"),
     ("win.filter", &["<Ctrl>i"], "Selection", "Filter items"),
     ("app.shortcuts", &["<Ctrl>question", "<Ctrl>F1"], "General", "Keyboard shortcuts"),
     ("app.preferences", &["<Ctrl>comma"], "General", "Preferences"),
@@ -109,6 +114,7 @@ fn main() -> glib::ExitCode {
     app.connect_startup(|app| {
         load_css();
         theme_ui::init();
+        gtk::Window::set_default_icon_name(APP_ID);
         search_ui::start();
         // Clean up after a crash or kill in the middle of a copy.
         let removed = kivo_core::ops::journal::recover(&kivo_core::ops::journal::file());

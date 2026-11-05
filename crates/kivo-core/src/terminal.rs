@@ -98,6 +98,16 @@ pub fn on_path(bin: &str) -> bool {
     })
 }
 
+/// TryExec-style check: an absolute path that is executable, or a program
+/// name found on PATH.
+pub fn on_path_or_abs(bin: &str) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    if bin.starts_with('/') {
+        return std::fs::metadata(bin).is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0);
+    }
+    on_path(bin)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

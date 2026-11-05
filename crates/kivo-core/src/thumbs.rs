@@ -210,7 +210,7 @@ impl Thumbnailer {
 }
 
 /// Desktop-entry style argument splitting (double quotes, backslash escapes).
-fn split_exec(s: &str) -> Vec<String> {
+pub(crate) fn split_exec(s: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
     let mut quoted = false;
