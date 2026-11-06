@@ -1,85 +1,142 @@
+<div align="center">
+
+<img src="data/icons/app/io.github.anuzdhk.Tuck.svg" width="128" alt="Tuck logo">
+
 # Tuck
 
-A fast, friendly file manager for Linux, written in Rust with GTK4 and libadwaita. It aims for Dolphin's feature set with a macOS Finder-like feel: double-click archive extraction, Quick Look, instant search, and app installation built in (from [Teku](https://github.com/anuzdhk/teku)).
+**A fast, friendly file manager for Linux.**<br>
+Dolphin's power with a calm, simple design: Quick Look, instant search, one-click archives and app installs built in.
 
-> **Status: early development (Milestones 1–9: browsing, file operations, archives, Quick Look, search, app installation, themes and icons, panels and Dolphin integration, packaging).** See [docs/PARITY.md](docs/PARITY.md) for exactly what works and what is partial or untested, and [docs/PLAN.md](docs/PLAN.md) for the architecture and roadmap.
+[![Stars](https://img.shields.io/github/stars/anuzdhk/kivo-filemanager?style=for-the-badge&logo=github&label=Stars)](https://github.com/anuzdhk/kivo-filemanager/stargazers)
+[![Watchers](https://img.shields.io/github/watchers/anuzdhk/kivo-filemanager?style=for-the-badge&logo=github&label=Watching)](https://github.com/anuzdhk/kivo-filemanager/watchers)
+[![Forks](https://img.shields.io/github/forks/anuzdhk/kivo-filemanager?style=for-the-badge&logo=github&label=Forks)](https://github.com/anuzdhk/kivo-filemanager/forks)
+<br>
+[![Latest release](https://img.shields.io/github/v/release/anuzdhk/kivo-filemanager?style=for-the-badge&label=Release)](https://github.com/anuzdhk/kivo-filemanager/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/anuzdhk/kivo-filemanager/ci.yml?branch=feat%2Fstrata&style=for-the-badge&label=CI)](https://github.com/anuzdhk/kivo-filemanager/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/License-GPL--3.0--or--later-blue?style=for-the-badge)](LICENSE)
+
+[Install](#install) · [Features](#features) · [Screenshots](#screenshots) · [Shortcuts](#keyboard-shortcuts) · [Themes](#themes) · [Build](#build-from-source)
+
+<img src="docs/screenshots/readme/main-light.png" alt="Tuck showing the Pictures folder with the Information panel" width="860">
+
+</div>
+
+---
 
 ## Install
 
-Packages for each release are on the [releases page](https://github.com/anuzdhk/kivo-filemanager/releases): `.deb` (Debian 13+, Ubuntu 25.04+), `.rpm` (Fedora 41+, openSUSE Tumbleweed), an Arch package, and an AppImage for everything else. Tuck needs GTK ≥ 4.16 and libadwaita ≥ 1.6, so Ubuntu 24.04 and older aren't supported. Once installed, Tuck can update itself from **Preferences › Updates**.
-
-From source, after installing the build dependencies below:
+**One command** (Debian, Ubuntu, Fedora, openSUSE, Arch, and everything else via AppImage):
 
 ```bash
-./install.sh --user                 # just you, no sudo
-sudo ./install.sh                   # everyone (/usr/local)
-./install.sh --user --set-default   # also make Tuck open folders
-./install.sh --user --uninstall
+curl -fsSL https://raw.githubusercontent.com/anuzdhk/kivo-filemanager/feat/strata/get.sh | sh
 ```
 
-Details for each package format, and how releases are made, are in [packaging/README.md](packaging/README.md).
-
-## Build
-
-Requirements: Rust (stable), GTK ≥ 4.16 and libadwaita ≥ 1.6 development files.
-
-Debian / Ubuntu:
+It picks the right package for your system, checks it against the release's SHA-256 checksums, and installs it. It asks for your password through `sudo`, except for the AppImage, which installs just for you. Want to see what it would do first?
 
 ```bash
-sudo apt install build-essential pkg-config libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev libpoppler-glib-dev libarchive-dev libvte-2.91-gtk4-dev gstreamer1.0-plugins-good
+curl -fsSL https://raw.githubusercontent.com/anuzdhk/kivo-filemanager/feat/strata/get.sh | sh -s -- --dry-run
 ```
 
-Fedora:
+Use `sh -s -- --appimage` to get the AppImage on any system.
 
-```bash
-sudo dnf install gcc pkgconf-pkg-config gtk4-devel libadwaita-devel gtksourceview5-devel poppler-glib-devel libarchive-devel vte291-gtk4-devel
-```
+### Or download a package
 
-Arch:
+Grab the file for your system from the [latest release](https://github.com/anuzdhk/kivo-filemanager/releases/latest):
 
-```bash
-sudo pacman -S base-devel gtk4 libadwaita gtksourceview5 poppler-glib libarchive vte4
-```
+| Your system | File | Install it with |
+|---|---|---|
+| Debian 13+, Ubuntu 25.04+, Linux Mint, Pop!_OS… | `tuck_<version>_amd64.deb` | `sudo apt install ./tuck_*.deb` |
+| Fedora 41+ | `tuck-<version>.x86_64.rpm` | `sudo dnf install ./tuck-*.x86_64.rpm` |
+| openSUSE Tumbleweed | `tuck-<version>.x86_64.rpm` | `sudo zypper install ./tuck-*.x86_64.rpm` |
+| Arch, EndeavourOS, Manjaro… | `tuck-<version>-x86_64.pkg.tar.zst` | `sudo pacman -U ./tuck-*.pkg.tar.zst` |
+| Anything else | `Tuck-<version>-x86_64.AppImage` | `chmod +x Tuck-*.AppImage`, then run it |
 
-Then:
+> [!NOTE]
+> Tuck needs **GTK 4.16** and **libadwaita 1.6** or newer. Ubuntu 24.04 LTS and older ship older versions, so they aren't supported yet.
 
-```bash
-cargo build --release
-./target/release/tuck            # restores your last session, or opens Home
-./target/release/tuck ~/Downloads
-cargo test --workspace             # core unit tests
-./target/release/tuck --version
-```
+### After installing
 
-## Layout
+- **Make Tuck your file manager:** Preferences › Updates › **Make Default**. Folders from your browser, desktop and other apps then open in Tuck.
+- **Stay up to date:** Preferences › Updates › **Check Now** (or turn on **Check Automatically**). Tuck downloads the right package, verifies it, and installs it when you say so.
+- **Uninstall:** remove it the way you installed it, e.g. `sudo apt remove tuck`, `sudo dnf remove tuck`, `sudo pacman -R tuck`, or delete `~/Applications/Tuck.AppImage`.
 
-- `crates/tuck-core`: UI-free logic (sorting, grouping, listing, file operations, freedesktop trash, undo, names, permissions, terminal detection) with its own tests.
-- `crates/tuck`: the GTK application.
-- `docs/`: plan, Dolphin parity checklist, benchmarks.
+---
 
-## Panels, tags and Dolphin integration
+## Features
 
-- **Terminal** (F4): a terminal under the files that follows the folder you're in, and moves the files along when you `cd`.
-- **Folders** (F7): a folder tree in the sidebar.
-- **Tags, rating, comment**: in the Information panel (F11). Stored the same way as Dolphin (`user.xdg.tags`, `user.baloo.rating`, `user.xdg.comment`), so both apps see them. Tags also appear in the sidebar; click one to find everything with that tag.
-- **Git**: coloured dots on changed files when a folder is in a git repository (needs `git` installed).
-- **Service menus**: actions installed for Dolphin (`~/.local/share/kio/servicemenus`, `/usr/share/kio/servicemenus`) appear in Tuck's context menu.
-- **Places**: Ctrl+B adds a folder (shared with GTK's bookmarks); right-click to rename or remove. Connect to Server… opens SFTP, SMB, FTP and WebDAV shares.
-- **Shortcuts**: change any of them in Preferences › Keyboard.
+**Browse your way**
+- Icons, compact and details views, tabs, and split view (F3)
+- A folder tree (F7), a built-in terminal that follows you (F4), and an Information panel (F11)
+- Live updates, type-ahead, a filter bar, selection mode, per-folder view settings, and session restore
 
-## Updates
+**Find things fast**
+- Instant search across your home folder, including inside documents and code (Ctrl+F)
+- Filters for kind, date and size, or type them: `kind:pdf`, `modified:week`, `size:>10mb`, `tag:work`
 
-Preferences › Updates › **Check Now** asks GitHub for the latest release of this project. If there's a newer one, Tuck shows its notes and offers the package that fits your system (`.deb` on Debian/Ubuntu, `.rpm` on Fedora/openSUSE, an Arch package, or the AppImage when you're running one or nothing else fits). **Download** saves it to your Downloads folder with progress; when the release publishes a `SHA256SUMS` file (or `<file>.sha256`), the download is verified and discarded if it doesn't match. **Install…** then hands it to Tuck's normal install flow, which asks before changing anything. Turn on **Check Automatically** for a once-a-day check at startup; it only fetches the version information.
+**Preview without opening**
+- Press **Space** for Quick Look: images, video, audio, PDFs, code with syntax colours, Markdown, and archive contents
+- Arrow keys move to the next file while the preview stays open
 
-Releases are expected at `github.com/anuzdhk/kivo-filemanager` (`REPO` in `crates/tuck-core/src/update.rs`). For release builds, attach the packages and a `SHA256SUMS` file to each GitHub release.
+**Archives and apps, one click away**
+- Double-click a `.zip`, `.tar.gz`, `.7z`, `.rar`… to extract it safely next to itself; password-protected archives too
+- Right-click › Compress to make ZIP, tar or 7z archives, with optional encryption
+- Double-click a `.deb`, `.rpm`, `.flatpakref` or AppImage to install it
 
-Tuck was called Kivo during development. On first start it moves Kivo's settings, session and caches (`~/.config/kivo`, `~/.local/state/kivo`, `~/.cache/kivo`) to the new `tuck` folders.
+**Organise**
+- Tags, star ratings and comments, shared with Dolphin; find everything with a tag from the sidebar
+- Git status dots on changed files
+- Undo and redo for every file operation; nothing is ever deleted by an undo
+- Bookmarks, network shares (SFTP, SMB, FTP, WebDAV), mounting and ejecting drives
+
+**Make it yours**
+- 10 themes plus your own, any accent colour, text that always stays readable
+- Tuck, Material, or your **system's own icon theme**
+- Every keyboard shortcut can be changed, and Dolphin's service menus work in Tuck
+
+---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/readme/details-terminal-git.png" alt="Details view with git status and the terminal panel"><br><sub><b>Details view</b> with git status dots and the built-in terminal (Tokyo Night theme)</sub></td>
+    <td width="50%"><img src="docs/screenshots/readme/search.png" alt="Searching the home folder"><br><sub><b>Search</b> results as you type, with kind, date and size filters</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/readme/theme-catppuccin.png" alt="Catppuccin theme"><br><sub><b>Catppuccin</b>, one of 10 built-in themes</sub></td>
+    <td width="50%"><img src="docs/screenshots/readme/preferences-themes.png" alt="Theme gallery in Preferences"><br><sub><b>Preferences</b>: pick a theme from live previews, or add your own</sub></td>
+  </tr>
+</table>
+
+---
+
+## Keyboard shortcuts
+
+| Action | Keys |
+|---|---|
+| Quick Look | <kbd>Space</kbd> |
+| Search | <kbd>Ctrl</kbd>+<kbd>F</kbd> |
+| New tab / close tab / reopen closed tab | <kbd>Ctrl</kbd>+<kbd>T</kbd> / <kbd>Ctrl</kbd>+<kbd>W</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> |
+| Split view | <kbd>F3</kbd> |
+| Terminal / folder tree / information panel | <kbd>F4</kbd> / <kbd>F7</kbd> / <kbd>F11</kbd> |
+| Go to a location | <kbd>Ctrl</kbd>+<kbd>L</kbd> |
+| Rename | <kbd>F2</kbd> |
+| Move to Trash / delete permanently | <kbd>Delete</kbd> / <kbd>Shift</kbd>+<kbd>Delete</kbd> |
+| Undo / redo | <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> |
+| Show hidden files | <kbd>Ctrl</kbd>+<kbd>H</kbd> |
+| Add folder to Places | <kbd>Ctrl</kbd>+<kbd>B</kbd> |
+| Preferences | <kbd>Ctrl</kbd>+<kbd>,</kbd> |
+| All shortcuts | <kbd>Ctrl</kbd>+<kbd>?</kbd> |
+
+Change any of them in **Preferences › Keyboard**.
+
+---
 
 ## Themes
 
-Pick a theme from the gallery, an accent colour, an icon style (Tuck, Material, or **System** to use your desktop's own icon theme), text size and spacing in **Preferences** (Ctrl+,). Tuck adjusts colours automatically so all text stays readable (WCAG AA) whatever you pick.
+Open **Preferences** (<kbd>Ctrl</kbd>+<kbd>,</kbd>) to pick a theme from the gallery, an accent colour, an icon style and the text size. Tuck adjusts colours automatically so text always stays readable (WCAG AA), whatever you choose.
 
-To add your own theme, put a `.toml` file in `~/.config/tuck/themes/` and press **Reload Themes**; it appears in the gallery:
+**Make your own:** put a `.toml` file in `~/.config/tuck/themes/`, then press **Reload Themes**. It appears in the gallery.
 
 ```toml
 name = "Solarized Dark"
@@ -92,7 +149,68 @@ dim_fg = "#839496"
 accent = "#268bd2"
 ```
 
-## Testing hooks
+---
+
+## Build from source
+
+You need Rust (stable) and the development files for GTK 4.16+ and libadwaita 1.6+.
+
+<details>
+<summary><b>Debian / Ubuntu</b></summary>
+
+```bash
+sudo apt install build-essential pkg-config libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev libpoppler-glib-dev libarchive-dev libvte-2.91-gtk4-dev gstreamer1.0-plugins-good
+```
+</details>
+
+<details>
+<summary><b>Fedora</b></summary>
+
+```bash
+sudo dnf install gcc pkgconf-pkg-config gtk4-devel libadwaita-devel gtksourceview5-devel poppler-glib-devel libarchive-devel vte291-gtk4-devel
+```
+</details>
+
+<details>
+<summary><b>Arch</b></summary>
+
+```bash
+sudo pacman -S base-devel gtk4 libadwaita gtksourceview5 poppler-glib libarchive vte4
+```
+</details>
+
+Then build, run, and install:
+
+```bash
+git clone https://github.com/anuzdhk/kivo-filemanager.git && cd kivo-filemanager
+cargo build --release
+./target/release/tuck            # run it from here, or install it:
+./install.sh --user              # just for you, no sudo (sudo ./install.sh for everyone)
+./install.sh --user --uninstall  # remove it again
+```
+
+How each package is built and how releases are made: [packaging/README.md](packaging/README.md).
+
+---
+
+## For developers
+
+<details>
+<summary><b>Project layout</b></summary>
+
+- `crates/tuck-core`: UI-free logic (files, archives, search, themes, updates, …) with its own tests
+- `crates/tuck`: the GTK 4 / libadwaita app
+- `data/`: desktop entry, AppStream metadata and icons
+- `packaging/`: `.deb`, RPM, AppImage and Arch packaging, version scripts
+- `docs/`: [Dolphin parity checklist](docs/PARITY.md) (what works and what's untested), [plan](docs/PLAN.md), [benchmarks](docs/BENCHMARKS.md)
+
+Tests: `cargo test --workspace`. Lints: `cargo clippy --workspace --all-targets`.
+
+To add a built-in theme, add its TOML to `BUILTIN` and its name to `CHOICES` in `crates/tuck-core/src/theme.rs`. The gallery and the readability checks pick it up from there.
+</details>
+
+<details>
+<summary><b>Scripting and test hooks</b></summary>
 
 The app can be driven from scripts for smoke tests and screenshots:
 
@@ -100,19 +218,28 @@ The app can be driven from scripts for smoke tests and screenshots:
 TUCK_ACTIONS="win.view-mode::details;win.split" TUCK_SCREENSHOT=/tmp/shot.png ./target/release/tuck ~/
 ```
 
-`TUCK_ACTIONS` runs window/app actions in order. `TUCK_SCREENSHOT` renders the window to PNG and then closes it (this works on both Wayland and X11). `TUCK_DEBUG_TIMING=1` prints listing timings. `TUCK_DEBUG_KEYS=1` logs which widget has focus for each key press, and whether the file view handled it.
+`TUCK_ACTIONS` runs window/app actions in order (see `crates/tuck/src/debug.rs` for the other steps). `TUCK_SCREENSHOT` renders the window to PNG and then closes it, on Wayland and X11. Scripted runs start their own instance and never touch a Tuck you have open. `TUCK_DEBUG_TIMING=1` prints listing timings; `TUCK_DEBUG_KEYS=1` logs keyboard focus.
+</details>
 
-Adding a built-in theme: add an entry with its TOML to `BUILTIN` and its name to `CHOICES` in `crates/tuck-core/src/theme.rs`. The gallery, readability checks and tests pick it up from there.
+<details>
+<summary><b>Coming from Kivo?</b></summary>
 
-## Third-party notices
+Tuck was called Kivo during development. On first start it moves Kivo's settings, session and caches (`~/.config/kivo`, `~/.local/state/kivo`, `~/.cache/kivo`) to the new `tuck` folders.
+</details>
 
-- UI icons: [Tabler Icons](https://github.com/tabler/tabler-icons), MIT (`LICENSES/tabler-icons-MIT.txt`), and [Material Symbols](https://github.com/google/material-design-icons), Apache-2.0 (`LICENSES/material-symbols-Apache-2.0.txt`). See `data/icons/README.md`. Tuck's folder and document icons are original artwork.
+---
 
-- App installation is ported from [Teku](https://github.com/anuzdhk/teku) by anuzdhk (GPL-3.0-or-later): file-type detection, distro detection, install routes and commands, AppImage menu entries (`teku-*.desktop` with `X-Teku-AppImage`, kept compatible), messages and history format. See `crates/tuck-core/src/install/`.
+## Credits and license
 
-- `crates/tuck-core/tests/fixtures/tree.rar` comes from the compress-tools crate (MIT OR Apache-2.0). See `crates/tuck-core/tests/fixtures/README.md`.
-- RAR extraction uses the system libarchive (BSD-2-Clause). Password-protected RAR uses the system `unrar` if present; it is not bundled.
+Tuck is free software under the **GPL-3.0-or-later** licence (see [LICENSE](LICENSE)).
 
-## License
+- App installation is ported from [Teku](https://github.com/anuzdhk/teku) (GPL-3.0-or-later): file-type and distro detection, install routes and commands, AppImage menu entries (kept compatible), messages and history format. See `crates/tuck-core/src/install/`.
+- UI icons: [Tabler Icons](https://github.com/tabler/tabler-icons) (MIT, `LICENSES/tabler-icons-MIT.txt`) and [Material Symbols](https://github.com/google/material-design-icons) (Apache-2.0, `LICENSES/material-symbols-Apache-2.0.txt`). Tuck's app icon and its folder and document icons are original artwork. See `data/icons/README.md`.
+- `crates/tuck-core/tests/fixtures/tree.rar` comes from the compress-tools crate (MIT OR Apache-2.0).
+- RAR extraction uses the system libarchive (BSD-2-Clause). Password-protected RAR uses the system `unrar` if present; it isn't bundled.
 
-GPL-3.0-or-later (see [LICENSE](LICENSE)). Tuck includes code ported from Teku, which is also GPL-3.0-or-later, so the combined work is distributed under GPL-3.0-or-later with full source available.
+<div align="center">
+
+If Tuck is useful to you, a ⭐ helps other people find it.
+
+</div>

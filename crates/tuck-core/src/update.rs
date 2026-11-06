@@ -140,6 +140,10 @@ pub fn pick_asset<'a>(release: &'a Release, kind: PackageKind, arch: &str) -> Op
     let all_arches = ["x86_64", "amd64", "x64", "aarch64", "arm64", "i686", "i386", "armhf", "armv7"];
     let fits = |a: &Asset| {
         let n = a.name.to_ascii_lowercase();
+        // Debug-symbol packages are never what to install.
+        if n.contains("-debuginfo-") || n.contains("-debugsource-") || n.contains("-debug-") {
+            return false;
+        }
         let mine = arch_words(arch);
         // Named for this CPU, or not named for any CPU (e.g. "noarch").
         mine.iter().any(|w| n.contains(w)) || !all_arches.iter().any(|w| n.contains(w))
@@ -294,6 +298,7 @@ mod tests {
         "assets": [
             {"name": "tuck_0.2.0_amd64.deb", "browser_download_url": "https://e/deb", "size": 10},
             {"name": "tuck_0.2.0_arm64.deb", "browser_download_url": "https://e/deb-arm", "size": 10},
+            {"name": "tuck-debuginfo-0.2.0-1.x86_64.rpm", "browser_download_url": "https://e/dbg", "size": 11},
             {"name": "tuck-0.2.0-1.x86_64.rpm", "browser_download_url": "https://e/rpm", "size": 11},
             {"name": "tuck-0.2.0-1.src.rpm", "browser_download_url": "https://e/srpm", "size": 11},
             {"name": "Tuck-0.2.0-x86_64.AppImage", "browser_download_url": "https://e/ai", "size": 12},

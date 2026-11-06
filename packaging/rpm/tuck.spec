@@ -2,7 +2,7 @@
 # Fedora and openSUSE. Builds offline from the source tarball plus a
 # vendored-crates tarball; packaging/rpm/make-sources.sh creates both.
 Name:           tuck
-Version:        0.1.0
+Version:        0.1.1
 Release:        1%{?dist}
 Summary:        Fast, friendly file manager
 # Tuck is GPL-3.0-or-later; bundled icons are MIT (Tabler) and Apache-2.0
@@ -68,5 +68,8 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.anuzdhk.Tuc
 %{_datadir}/icons/hicolor/*/apps/io.github.anuzdhk.Tuck.*
 
 %changelog
+* Fri Nov 06 2026 anuzdhk <95576641+anuzdhk@users.noreply.github.com> - 0.1.1-1
+- AppImage now follows Tuck's own styling and runs natively on Wayland; one-line curl installer; debug packages no longer published
+
 * Fri Nov 06 2026 anuzdhk <95576641+anuzdhk@users.noreply.github.com> - 0.1.0-1
 - First release

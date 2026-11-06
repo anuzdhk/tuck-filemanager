@@ -38,9 +38,20 @@ export DEPLOY_GTK_VERSION=4
 export PATH="$TOOLS:$PATH"
 export LDAI_OUTPUT="Tuck-$VERSION-$ARCH.AppImage"
 cd "$OUT"
+# 1. Bundle the libraries and GTK support files into the AppDir.
 "$LD" --appdir "$APPDIR" \
     --plugin gtk \
     --desktop-file "$APPDIR/usr/share/applications/io.github.anuzdhk.Tuck.desktop" \
-    --icon-file "$ROOT/data/icons/app/hicolor/256x256/apps/io.github.anuzdhk.Tuck.png" \
-    --output appimage
+    --icon-file "$ROOT/data/icons/app/hicolor/256x256/apps/io.github.anuzdhk.Tuck.png"
+# 2. The GTK plugin's start-up hook forces GTK_THEME=Adwaita:… and
+#    GDK_BACKEND=x11. Both are wrong for a libadwaita app: the forced theme
+#    fights libadwaita's own styling (mixed light/dark, invisible text) and
+#    the forced X11 backend loses native Wayland. Drop those two lines.
+HOOK="$APPDIR/apprun-hooks/linuxdeploy-plugin-gtk.sh"
+if [ -f "$HOOK" ]; then
+    sed -i -e '/^export GTK_THEME=/d' -e '/^export GDK_BACKEND=x11/d' "$HOOK"
+    ! grep -q '^export GTK_THEME=\|^export GDK_BACKEND=' "$HOOK" || { echo "couldn't patch $HOOK" >&2; exit 1; }
+fi
+# 3. Pack the AppImage.
+"$LD" --appdir "$APPDIR" --output appimage
 echo "Built $OUT/$LDAI_OUTPUT"

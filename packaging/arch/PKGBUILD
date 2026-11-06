@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Maintainer: anuzdhk <95576641+anuzdhk@users.noreply.github.com>
 pkgname=tuck
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc="Fast, friendly file manager"
 arch=('x86_64' 'aarch64')
@@ -14,7 +14,7 @@ optdepends=('gvfs: network locations, Trash on other drives'
             'git: git status in folders'
             'flatpak: installing .flatpakref files'
             'unrar: password-protected RAR archives')
-options=('!lto')
+options=('!lto' '!debug')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 

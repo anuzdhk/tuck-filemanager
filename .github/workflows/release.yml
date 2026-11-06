@@ -56,7 +56,9 @@ jobs:
           rpmdev-setuptree
           packaging/rpm/make-sources.sh "$HOME/rpmbuild/SOURCES"
           rpmbuild -ba packaging/rpm/tuck.spec
-          mkdir -p out && cp "$HOME"/rpmbuild/RPMS/*/*.rpm "$HOME"/rpmbuild/SRPMS/*.rpm out/
+          mkdir -p out
+          # The package and its source package; not the debug-symbol packages.
+          find "$HOME/rpmbuild/RPMS" "$HOME/rpmbuild/SRPMS" -name '*.rpm' ! -name '*-debuginfo-*' ! -name '*-debugsource-*' -exec cp {} out/ \;
       - uses: actions/upload-artifact@v7
         with: { name: rpm, path: out/*.rpm }
 
@@ -99,7 +101,7 @@ jobs:
           git archive --format=tar.gz --prefix="tuck-$v/" -o "/tmp/pkg/tuck-$v.tar.gz" HEAD
           chown -R builder /tmp/pkg
           su builder -c "cd /tmp/pkg && makepkg --noconfirm"
-          mkdir -p out && cp /tmp/pkg/*.pkg.tar.zst out/
+          mkdir -p out && find /tmp/pkg -maxdepth 1 -name '*.pkg.tar.zst' ! -name '*-debug-*' -exec cp {} out/ \;
       - uses: actions/upload-artifact@v7
         with: { name: arch, path: out/*.pkg.tar.zst }
 
