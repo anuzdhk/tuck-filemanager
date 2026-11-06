@@ -2,7 +2,22 @@
 
 A fast, friendly file manager for Linux, written in Rust with GTK4 and libadwaita. It aims for Dolphin's feature set with a macOS Finder-like feel: double-click archive extraction, Quick Look, instant search, and app installation built in (from [Teku](https://github.com/anuzdhk/teku)).
 
-> **Status: early development (Milestones 1–8 of 9: browsing, file operations, archives, Quick Look, search, app installation, themes and icons, panels and Dolphin integration).** See [docs/PARITY.md](docs/PARITY.md) for exactly what works and what is partial or untested, and [docs/PLAN.md](docs/PLAN.md) for the architecture and roadmap.
+> **Status: early development (Milestones 1–9: browsing, file operations, archives, Quick Look, search, app installation, themes and icons, panels and Dolphin integration, packaging).** See [docs/PARITY.md](docs/PARITY.md) for exactly what works and what is partial or untested, and [docs/PLAN.md](docs/PLAN.md) for the architecture and roadmap.
+
+## Install
+
+Packages for each release are on the [releases page](https://github.com/anuzdhk/kivo-filemanager/releases): `.deb` (Debian 13+, Ubuntu 25.04+), `.rpm` (Fedora 41+, openSUSE Tumbleweed), an Arch package, and an AppImage for everything else. Tuck needs GTK ≥ 4.16 and libadwaita ≥ 1.6, so Ubuntu 24.04 and older aren't supported. Once installed, Tuck can update itself from **Preferences › Updates**.
+
+From source, after installing the build dependencies below:
+
+```bash
+./install.sh --user                 # just you, no sudo
+sudo ./install.sh                   # everyone (/usr/local)
+./install.sh --user --set-default   # also make Tuck open folders
+./install.sh --user --uninstall
+```
+
+Details for each package format, and how releases are made, are in [packaging/README.md](packaging/README.md).
 
 ## Build
 
@@ -33,6 +48,7 @@ cargo build --release
 ./target/release/tuck            # restores your last session, or opens Home
 ./target/release/tuck ~/Downloads
 cargo test --workspace             # core unit tests
+./target/release/tuck --version
 ```
 
 ## Layout

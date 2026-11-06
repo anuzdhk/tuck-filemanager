@@ -1,0 +1,123 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Push a tag like v0.2.0 (see packaging/bump-version.sh). This builds every
+# package, writes SHA256SUMS, and publishes a GitHub release. Tuck's
+# "Check for Updates" reads that release and verifies downloads against
+# SHA256SUMS.
+name: Release
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  versions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Every file states the tag's version
+        run: packaging/check-version.sh "$GITHUB_REF_NAME"
+
+  deb:
+    needs: versions
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git build-essential pkg-config dpkg-dev \
+            libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev libpoppler-glib-dev libarchive-dev libvte-2.91-gtk4-dev
+      - uses: actions/checkout@v7
+      - name: Build the .deb
+        run: |
+          curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
+          . "$HOME/.cargo/env"
+          cargo install --locked cargo-deb
+          cargo deb --locked -p tuck
+          dpkg-deb -I target/debian/*.deb
+      - uses: actions/upload-artifact@v7
+        with: { name: deb, path: target/debian/*.deb }
+
+  rpm:
+    needs: versions
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - name: Install build dependencies
+        run: |
+          dnf install -y git rpm-build rpmdevtools cargo rust gcc xz desktop-file-utils \
+            gtk4-devel libadwaita-devel gtksourceview5-devel poppler-glib-devel libarchive-devel vte291-gtk4-devel
+      - uses: actions/checkout@v7
+      - name: Build the .rpm
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          rpmdev-setuptree
+          packaging/rpm/make-sources.sh "$HOME/rpmbuild/SOURCES"
+          rpmbuild -ba packaging/rpm/tuck.spec
+          mkdir -p out && cp "$HOME"/rpmbuild/RPMS/*/*.rpm "$HOME"/rpmbuild/SRPMS/*.rpm out/
+      - uses: actions/upload-artifact@v7
+        with: { name: rpm, path: out/*.rpm }
+
+  appimage:
+    needs: versions
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl wget git file build-essential pkg-config \
+            libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev libpoppler-glib-dev libarchive-dev libvte-2.91-gtk4-dev \
+            librsvg2-common gdk-pixbuf2.0-bin
+      - uses: actions/checkout@v7
+      - name: Build the AppImage
+        run: |
+          curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
+          . "$HOME/.cargo/env"
+          packaging/appimage/build.sh "$PWD/out"
+      - uses: actions/upload-artifact@v7
+        with: { name: appimage, path: out/*.AppImage }
+
+  arch:
+    needs: versions
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install build dependencies
+        run: |
+          pacman -Syu --noconfirm --needed base-devel git cargo gtk4 libadwaita gtksourceview5 poppler-glib libarchive vte4 hicolor-icon-theme
+          useradd -m builder
+      - uses: actions/checkout@v7
+      - name: Build the Arch package
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          v="${GITHUB_REF_NAME#v}"
+          mkdir -p /tmp/pkg && cp packaging/arch/PKGBUILD /tmp/pkg/
+          # Build from this checkout (makepkg uses a source file that's already there).
+          git archive --format=tar.gz --prefix="tuck-$v/" -o "/tmp/pkg/tuck-$v.tar.gz" HEAD
+          chown -R builder /tmp/pkg
+          su builder -c "cd /tmp/pkg && makepkg --noconfirm"
+          mkdir -p out && cp /tmp/pkg/*.pkg.tar.zst out/
+      - uses: actions/upload-artifact@v7
+        with: { name: arch, path: out/*.pkg.tar.zst }
+
+  publish:
+    needs: [deb, rpm, appimage, arch]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with: { path: dist, merge-multiple: true }
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS && cat SHA256SUMS
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          # Notes: the newest release's text from the AppStream file.
+          notes=$(sed -n '/<release version="'"$v"'"/,/<\/release>/p' data/desktop/io.github.anuzdhk.Tuck.metainfo.xml | sed -n 's/.*<p>\(.*\)<\/p>.*/\1/p')
+          gh release create "$GITHUB_REF_NAME" dist/* --title "Tuck $v" --notes "${notes:-Tuck $v}"

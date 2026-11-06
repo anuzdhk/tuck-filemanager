@@ -124,10 +124,12 @@ fn palette_of(id: &str) -> Option<Palette> {
 /// The preview for a theme card. "Follow System" shows light and dark
 /// side by side.
 fn preview(id: &str) -> gtk::DrawingArea {
-    let area = gtk::DrawingArea::builder().content_width(150).content_height(94).css_classes(["theme-preview"]).build();
+    let area = gtk::DrawingArea::builder().content_width(112).content_height(70).halign(gtk::Align::Center).css_classes(["theme-preview"]).build();
     let id = id.to_string();
     area.set_draw_func(move |_, cr, w, h| {
-        let (w, h) = (w as f64, h as f64);
+        // Drawn at the 150×94 design size, scaled to fit.
+        cr.scale(w as f64 / 150.0, h as f64 / 94.0);
+        let (w, h) = (150.0, 94.0);
         if id == "system" {
             let (Some(light), Some(dark)) = (palette_of("light"), palette_of("dark")) else { return };
             cr.save().ok();
@@ -159,7 +161,7 @@ fn card(child: &impl IsA<gtk::Widget>, title: &str, subtitle: &str) -> gtk::Togg
     let b = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(6).build();
     b.append(child);
     // Capped widths, so long names don't force fewer cards per row.
-    b.append(&gtk::Label::builder().label(title).css_classes(["card-title"]).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(18).build());
+    b.append(&gtk::Label::builder().label(title).css_classes(["card-title"]).ellipsize(gtk::pango::EllipsizeMode::End).max_width_chars(14).build());
     b.append(
         &gtk::Label::builder()
             .label(subtitle)
@@ -168,7 +170,7 @@ fn card(child: &impl IsA<gtk::Widget>, title: &str, subtitle: &str) -> gtk::Togg
             .lines(2)
             .ellipsize(gtk::pango::EllipsizeMode::End)
             .justify(gtk::Justification::Center)
-            .max_width_chars(20)
+            .max_width_chars(16)
             .build(),
     );
     let t = gtk::ToggleButton::builder().child(&b).css_classes(["pick-card"]).build();
@@ -226,11 +228,12 @@ fn fill_themes(flow: &gtk::FlowBox) {
     }
 }
 
-/// Focus the selected theme card (which also scrolls the page to the top).
+/// Focus the first selected choice on the page (the accent, near the top),
+/// so the page opens at the top rather than wherever GTK puts focus.
 pub fn focus_current(page: &adw::PreferencesPage) {
     fn find(w: &gtk::Widget) -> Option<gtk::ToggleButton> {
         if let Some(t) = w.downcast_ref::<gtk::ToggleButton>()
-            && t.has_css_class("pick-card")
+            && (t.has_css_class("pick-card") || t.has_css_class("accent-swatch"))
             && t.is_active()
         {
             return Some(t.clone());
@@ -261,9 +264,9 @@ pub fn page(dialog: &adw::PreferencesDialog) -> adw::PreferencesPage {
         .description("Colours are adjusted automatically so text always stays readable.")
         .build();
     let theme_flow = grid();
+    theme_flow.set_max_children_per_line(5);
     fill_themes(&theme_flow);
     themes.add(&theme_flow);
-    page.add(&themes);
     {
         let f = theme_flow.clone();
         refresh.borrow_mut().push(Box::new(move || {
@@ -490,6 +493,7 @@ pub fn page(dialog: &adw::PreferencesDialog) -> adw::PreferencesPage {
     });
     custom_group.add(&reload);
     custom_group.add(&errors_box);
+    page.add(&themes);
     page.add(&custom_group);
     page
 }

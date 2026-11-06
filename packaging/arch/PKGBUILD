@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Maintainer: anuzdhk <95576641+anuzdhk@users.noreply.github.com>
+pkgname=tuck
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Fast, friendly file manager"
+arch=('x86_64' 'aarch64')
+url="https://github.com/anuzdhk/kivo-filemanager"
+license=('GPL-3.0-or-later' 'MIT' 'Apache-2.0')
+depends=('gtk4>=4.16' 'libadwaita>=1.6' 'gtksourceview5' 'poppler-glib' 'libarchive' 'vte4' 'hicolor-icon-theme')
+makedepends=('cargo' 'git')
+optdepends=('gvfs: network locations, Trash on other drives'
+            'gvfs-smb: Windows shares'
+            'git: git status in folders'
+            'flatpak: installing .flatpakref files'
+            'unrar: password-protected RAR archives')
+options=('!lto')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+_srcdir() {
+    # GitHub names the folder after the repository.
+    find "$srcdir" -mindepth 1 -maxdepth 1 -type d | head -n1
+}
+
+prepare() {
+    cd "$(_srcdir)"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd "$(_srcdir)"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    cargo build --frozen --release -p tuck
+}
+
+check() {
+    cd "$(_srcdir)"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo test --frozen --release -p tuck-core
+}
+
+package() {
+    cd "$(_srcdir)"
+    ./install.sh --no-build --prefix /usr --destdir "$pkgdir"
+    rm -rf "$pkgdir/usr/share/tuck"
+}

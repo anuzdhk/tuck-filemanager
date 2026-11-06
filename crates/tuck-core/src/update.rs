@@ -120,8 +120,9 @@ pub fn package_kind(family: OsFamily, running_appimage: bool) -> PackageKind {
     match family {
         OsFamily::Debian => PackageKind::Deb,
         OsFamily::Fedora | OsFamily::Suse => PackageKind::Rpm,
-        OsFamily::Arch => PackageKind::Arch,
-        OsFamily::Unknown => PackageKind::AppImage,
+        // Arch users who installed the package update it with pacman; the
+        // install flow can't install Arch packages, so offer the AppImage.
+        OsFamily::Arch | OsFamily::Unknown => PackageKind::AppImage,
     }
 }
 
@@ -331,7 +332,7 @@ mod tests {
     fn package_kinds() {
         assert_eq!(package_kind(OsFamily::Debian, false), PackageKind::Deb);
         assert_eq!(package_kind(OsFamily::Suse, false), PackageKind::Rpm);
-        assert_eq!(package_kind(OsFamily::Arch, false), PackageKind::Arch);
+        assert_eq!(package_kind(OsFamily::Arch, false), PackageKind::AppImage);
         assert_eq!(package_kind(OsFamily::Unknown, false), PackageKind::AppImage);
         assert_eq!(package_kind(OsFamily::Debian, true), PackageKind::AppImage);
     }

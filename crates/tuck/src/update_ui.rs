@@ -58,6 +58,63 @@ pub fn startup_check(win: &crate::window::Window) {
     });
 }
 
+const DESKTOP_ID: &str = "io.github.anuzdhk.Tuck.desktop";
+
+/// Is Tuck the app that opens folders?
+fn is_default_fm() -> bool {
+    gtk::gio::AppInfo::default_for_type("inode/directory", false).and_then(|a| a.id()).is_some_and(|id| id == DESKTOP_ID)
+}
+
+/// "Default File Manager": make Tuck open folders everywhere (the same as
+/// `xdg-mime default io.github.anuzdhk.Tuck.desktop inode/directory`).
+fn default_fm_group() -> adw::PreferencesGroup {
+    let group = adw::PreferencesGroup::builder().title("Default File Manager").build();
+    let row = adw::ActionRow::builder().title("Open Folders With Tuck").build();
+    let button = gtk::Button::builder().label("Make Default").valign(gtk::Align::Center).build();
+    row.add_suffix(&button);
+    group.add(&row);
+    let installed = gtk::gio::AppInfo::all().into_iter().find(|a| a.id().is_some_and(|id| id == DESKTOP_ID));
+    let sync = {
+        let (row, button) = (row.clone(), button.clone());
+        let installed = installed.is_some();
+        move || {
+            if !installed {
+                row.set_subtitle("Install Tuck first (a package, or ./install.sh) so other apps can find it");
+                button.set_sensitive(false);
+            } else if is_default_fm() {
+                row.set_subtitle("Tuck opens folders from other apps, the desktop and downloads");
+                button.set_label("Default");
+                button.set_sensitive(false);
+            } else {
+                let current = gtk::gio::AppInfo::default_for_type("inode/directory", false).map(|a| a.display_name().to_string());
+                row.set_subtitle(&match current {
+                    Some(name) => format!("Folders currently open in {}", glib::markup_escape_text(&name)),
+                    None => "No app is set to open folders".to_string(),
+                });
+                button.set_label("Make Default");
+                button.set_sensitive(true);
+            }
+        }
+    };
+    sync();
+    button.connect_clicked(move |b| {
+        let Some(app) = &installed else { return };
+        let mut err = None;
+        for t in ["inode/directory", "application/x-gnome-saved-search"] {
+            if let Err(e) = app.set_as_default_for_type(t) {
+                err.get_or_insert(e);
+            }
+        }
+        if let Some(e) = err
+            && let Some(d) = b.ancestor(adw::PreferencesDialog::static_type()).and_downcast::<adw::PreferencesDialog>()
+        {
+            d.add_toast(adw::Toast::new(&format!("Couldn't change the default: {}", e.message())));
+        }
+        sync();
+    });
+    group
+}
+
 /// The Updates page of Preferences.
 pub fn page() -> adw::PreferencesPage {
     let page = adw::PreferencesPage::builder().title("Updates").name("updates").icon_name("tuck-downloads-symbolic").build();
@@ -81,6 +138,8 @@ pub fn page() -> adw::PreferencesPage {
         theme_ui::update_quiet(|s| s.check_updates = on);
     });
     group.add(&auto);
+
+    page.add(&default_fm_group());
 
     // Filled in after a check.
     let result = adw::PreferencesGroup::builder().visible(false).build();

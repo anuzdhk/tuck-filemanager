@@ -16,3 +16,37 @@ sourceview5 = "0.11.2"
 poppler-rs = "0.26.0"
 image = { version = "0.25.10", default-features = false, features = ["gif"] }
 vte4 = "0.10.0"
+
+# `cargo deb -p tuck` builds the Debian/Ubuntu package (see packaging/README.md).
+[package.metadata.deb]
+name = "tuck"
+maintainer = "anuzdhk <95576641+anuzdhk@users.noreply.github.com>"
+copyright = "2026 anuzdhk"
+license-file = ["../../LICENSE", "0"]
+extended-description = """\
+Tuck is a fast, friendly file manager for GNOME and other desktops: icons, \
+compact and details views, tabs and split view, Quick Look previews with \
+Space, instant search, safe double-click archive extraction, built-in app \
+installation, Dolphin-compatible tags and service menus, git status and a \
+built-in terminal."""
+section = "utils"
+priority = "optional"
+depends = "$auto, libgtk-4-1 (>= 4.16), libadwaita-1-0 (>= 1.6)"
+recommends = "gvfs-backends, gvfs-fuse, git, xdg-utils"
+suggests = "flatpak, unrar"
+assets = [
+    ["target/release/tuck", "usr/bin/", "755"],
+    ["../../data/desktop/io.github.anuzdhk.Tuck.desktop", "usr/share/applications/", "644"],
+    ["../../data/desktop/io.github.anuzdhk.Tuck.metainfo.xml", "usr/share/metainfo/", "644"],
+    ["../../data/icons/app/io.github.anuzdhk.Tuck.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
+    ["../../data/icons/app/hicolor/16x16/apps/io.github.anuzdhk.Tuck.png", "usr/share/icons/hicolor/16x16/apps/", "644"],
+    ["../../data/icons/app/hicolor/24x24/apps/io.github.anuzdhk.Tuck.png", "usr/share/icons/hicolor/24x24/apps/", "644"],
+    ["../../data/icons/app/hicolor/32x32/apps/io.github.anuzdhk.Tuck.png", "usr/share/icons/hicolor/32x32/apps/", "644"],
+    ["../../data/icons/app/hicolor/48x48/apps/io.github.anuzdhk.Tuck.png", "usr/share/icons/hicolor/48x48/apps/", "644"],
+    ["../../data/icons/app/hicolor/64x64/apps/io.github.anuzdhk.Tuck.png", "usr/share/icons/hicolor/64x64/apps/", "644"],
+    ["../../data/icons/app/hicolor/128x128/apps/io.github.anuzdhk.Tuck.png", "usr/share/icons/hicolor/128x128/apps/", "644"],
+    ["../../data/icons/app/hicolor/256x256/apps/io.github.anuzdhk.Tuck.png", "usr/share/icons/hicolor/256x256/apps/", "644"],
+    ["../../data/icons/app/hicolor/512x512/apps/io.github.anuzdhk.Tuck.png", "usr/share/icons/hicolor/512x512/apps/", "644"],
+    ["../../LICENSES/*", "usr/share/doc/tuck/licenses/", "644"],
+    ["../../README.md", "usr/share/doc/tuck/", "644"],
+]

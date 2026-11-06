@@ -1,0 +1,30 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    # Debian 13: the oldest supported base (GTK 4.18, libadwaita 1.7).
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git build-essential pkg-config \
+            libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev libpoppler-glib-dev libarchive-dev \
+            libvte-2.91-gtk4-dev desktop-file-utils appstream
+      - uses: actions/checkout@v7
+      - name: Install Rust
+        run: curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --component clippy
+      - name: Clippy
+        run: . "$HOME/.cargo/env" && cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: Tests
+        run: . "$HOME/.cargo/env" && cargo test --locked --workspace
+      - name: Validate desktop entry and AppStream data
+        run: |
+          desktop-file-validate data/desktop/io.github.anuzdhk.Tuck.desktop
+          appstreamcli validate --no-net data/desktop/io.github.anuzdhk.Tuck.metainfo.xml
+          packaging/check-version.sh "$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"

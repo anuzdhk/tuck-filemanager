@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026 anuzdhk -->
+<component type="desktop-application">
+  <id>io.github.anuzdhk.Tuck</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Tuck</name>
+  <summary>Browse, organise and find your files</summary>
+  <developer id="io.github.anuzdhk">
+    <name>anuzdhk</name>
+  </developer>
+  <description>
+    <p>
+      Tuck is a fast, friendly file manager. It has the depth of a power-user
+      file manager with a calm, simple design.
+    </p>
+    <ul>
+      <li>Icons, compact and details views, tabs, split view and a folder tree</li>
+      <li>Quick Look: press Space to preview images, video, PDFs, code and archives</li>
+      <li>Instant search across your home folder, including file contents</li>
+      <li>Double-click an archive to extract it safely, or compress with one click</li>
+      <li>Install .deb, .rpm, Flatpak and AppImage files right from the file view</li>
+      <li>Tags, ratings and comments shared with Dolphin, git status, and a built-in terminal</li>
+      <li>Ten themes, any accent colour, your own themes, and readable text guaranteed</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.anuzdhk.Tuck.desktop</launchable>
+  <url type="homepage">https://github.com/anuzdhk/kivo-filemanager</url>
+  <url type="bugtracker">https://github.com/anuzdhk/kivo-filemanager/issues</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Folders with the Information panel</caption>
+      <image>https://raw.githubusercontent.com/anuzdhk/kivo-filemanager/feat/strata/docs/screenshots/milestone-8/tags.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Themes in Preferences</caption>
+      <image>https://raw.githubusercontent.com/anuzdhk/kivo-filemanager/feat/strata/docs/screenshots/milestone-8/prefs-themes.png</image>
+    </screenshot>
+  </screenshots>
+  <provides>
+    <binary>tuck</binary>
+    <mediatype>inode/directory</mediatype>
+  </provides>
+  <categories>
+    <category>System</category>
+    <category>FileTools</category>
+    <category>FileManager</category>
+  </categories>
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-06">
+      <description>
+        <p>First release.</p>
+      </description>
+    </release>
+  </releases>
+</component>

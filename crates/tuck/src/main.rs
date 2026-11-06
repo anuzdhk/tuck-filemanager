@@ -124,6 +124,17 @@ fn main() -> glib::ExitCode {
         fv
     }));
 
+    // Command line: `tuck [--new-window] [FOLDER|URI…]`, `tuck --version`.
+    app.add_main_option("new-window", glib::Char::from(b'w'), glib::OptionFlags::NONE, glib::OptionArg::None, "Open a new window", None);
+    app.add_main_option("version", glib::Char::from(b'v'), glib::OptionFlags::NONE, glib::OptionArg::None, "Show the version and exit", None);
+    app.connect_handle_local_options(|_, opts| {
+        if opts.contains("version") {
+            println!("Tuck {}", env!("CARGO_PKG_VERSION"));
+            return std::ops::ControlFlow::Break(glib::ExitCode::SUCCESS);
+        }
+        // --new-window needs nothing else: each launch opens a window.
+        std::ops::ControlFlow::Continue(())
+    });
     app.connect_startup(|app| {
         load_css();
         theme_ui::init();
