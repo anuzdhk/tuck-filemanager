@@ -4,12 +4,12 @@ All numbers are from the development machine: Ubuntu 26.04, 20 threads, NVMe, GN
 
 ## Opening a folder with 100,000 files (Milestone 1)
 
-Set-up: `seq 1 100000 | sed 's/^/file-/;s/$/.txt/' | xargs touch` in an empty folder. Timings are printed with `KIVO_DEBUG_TIMING=1`.
+Set-up: `seq 1 100000 | sed 's/^/file-/;s/$/.txt/' | xargs touch` in an empty folder. Timings are printed with `TUCK_DEBUG_TIMING=1`.
 
 | Stage | Time |
 |---|---|
 | First 300 items on screen | ~50 ms |
-| Read directory + stat 100k entries (worker thread, `kivo-core::listing`) | ~0.25 s |
+| Read directory + stat 100k entries (worker thread, `tuck-core::listing`) | ~0.25 s |
 | Build 100k `FileItem`s (main thread) | 30–55 ms |
 | Insert into GTK models (filter → sort → selection → view), window already open | 0.33–2.3 s |
 | Same insert with `GTK_A11Y=none` | 0.27–0.5 s |
@@ -27,10 +27,10 @@ Reproduce:
 
 ```bash
 mkdir -p /tmp/big && (cd /tmp/big && seq 1 100000 | sed 's/^/file-/;s/$/.txt/' | xargs touch)
-cargo build --release -p kivo
-KIVO_DEBUG_TIMING=1 ./target/release/kivo /tmp/big
+cargo build --release -p tuck
+TUCK_DEBUG_TIMING=1 ./target/release/tuck /tmp/big
 # Simulate opening the folder after the window is up:
-KIVO_DEBUG_TIMING=1 KIVO_LIST_DELAY_MS=2000 ./target/release/kivo /tmp/big
+TUCK_DEBUG_TIMING=1 TUCK_LIST_DELAY_MS=2000 ./target/release/tuck /tmp/big
 ```
 
 ## Search (Milestone 5)
@@ -40,8 +40,8 @@ Target: results under 50 ms on 1,000,000 indexed files.
 Reproduce (adding `--home` also crawls your home folder; it reads only names, sizes and dates):
 
 ```bash
-cargo run --release -p kivo-core --example search_bench -- --home
-RAYON_NUM_THREADS=2 cargo run --release -p kivo-core --example search_bench
+cargo run --release -p tuck-core --example search_bench -- --home
+RAYON_NUM_THREADS=2 cargo run --release -p tuck-core --example search_bench
 ```
 
 The synthetic index has 1,000,000 entries with realistic names, folder depth, extensions, hidden items, sizes and dates. Each query below ran 40 times after a warm-up and returns the best 500 results. Times are per query.

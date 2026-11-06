@@ -1,0 +1,35 @@
+[package]
+name = "tuck-core"
+description = "UI-free core of the Tuck file manager"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+bzip2 = "0.6.1"
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+compress-tools = "0.16.1"
+flate2 = "1.1.10"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "gif", "webp", "bmp", "tiff", "ico", "rayon"] }
+libc = "0.2.191"
+liblzma = "0.4.9"
+md5 = { package = "md-5", version = "0.11.0" }
+memchr = "2.8.3"
+png = "0.18.1"
+pulldown-cmark = "0.13.6"
+rayon = "1.12.0"
+serde.workspace = true
+serde_json.workspace = true
+sevenz-rust2 = { version = "0.24.2", features = ["zstd", "deflate"] }
+sha2 = "0.11.1"
+tantivy = "0.27.0"
+tar = "0.4.46"
+toml = "1.2.0"
+ureq = "3.5.1"
+zip = "9.3.0"
+zstd = "0.14.3"
+
+[dev-dependencies]
+resvg = "0.49.0"
+tempfile.workspace = true
+usvg = "0.49.0"

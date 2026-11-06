@@ -1,0 +1,434 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * Tuck base styles. Colours come from libadwaita's CSS variables so the
+ * theme engine can recolour everything by overriding a handful of tokens.
+ * Spacing follows an 4/8 px rhythm; hit targets are at least 32 px.
+ */
+
+/* ------------------------------------------------------------ sidebar */
+
+.brand {
+  font-weight: 800;
+  font-size: 1.05em;
+  letter-spacing: 0.02em;
+}
+
+.tuck-sidebar .places {
+  padding: 4px 8px 8px 8px;
+}
+
+.tuck-sidebar .places > row {
+  min-height: 34px;
+  border-radius: 9px;
+  padding: 0 10px;
+  margin: 1px 0;
+}
+
+.tuck-sidebar .places > row:selected {
+  background: var(--accent-bg-color);
+  color: var(--accent-fg-color);
+}
+
+.tuck-sidebar .folders-tree {
+  padding: 4px 8px 8px 4px;
+}
+
+.tuck-sidebar .folders-tree > row {
+  min-height: 28px;
+  border-radius: 7px;
+  padding: 0 6px;
+  margin: 0;
+}
+
+.tuck-sidebar .folders-tree > row:selected {
+  background: var(--accent-bg-color);
+  color: var(--accent-fg-color);
+}
+
+.tuck-sidebar .sidebar-switcher button {
+  min-height: 26px;
+  font-size: 0.9em;
+}
+
+.sidebar-heading {
+  font-size: 0.8em;
+  font-weight: 700;
+  margin: 14px 0 4px 2px;
+  color: var(--tuck-sidebar-dim-fg);
+}
+
+.tuck-sidebar .places > row:first-child .sidebar-heading {
+  margin-top: 4px;
+}
+
+.tuck-sidebar .eject {
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+}
+
+.storage {
+  margin: 8px 12px 14px 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sidebar-fg-color) 6%, transparent);
+}
+
+.storage-title {
+  font-weight: 700;
+  font-size: 0.9em;
+}
+
+.storage-detail {
+  font-size: 0.82em;
+  color: var(--tuck-sidebar-dim-fg);
+}
+
+.storage-bar trough {
+  min-height: 6px;
+  border-radius: 99px;
+}
+
+.storage-bar block.filled {
+  background: var(--accent-bg-color);
+  border-radius: 99px;
+}
+
+.storage-bar.nearly-full block.filled {
+  background: var(--destructive-bg-color);
+}
+
+/* -------------------------------------------------------------- header */
+
+.location-bar {
+  min-height: 34px;
+}
+
+.crumbs {
+  padding: 0 2px;
+}
+
+.crumb {
+  min-height: 28px;
+  padding: 0 8px;
+  border-radius: 7px;
+  font-weight: 500;
+}
+
+.crumb.current {
+  font-weight: 700;
+}
+
+.crumb-sep {
+  opacity: 0.7;
+}
+
+/* --------------------------------------------------------------- panes */
+
+.pane-heading {
+  padding: 18px 24px 10px 24px;
+}
+
+.pane-title {
+  font-size: 1.55em;
+  font-weight: 800;
+}
+
+.pane-subtitle {
+  font-size: 0.9em;
+  color: var(--tuck-dim-fg);
+}
+
+.pane {
+  background: var(--view-bg-color);
+  color: var(--view-fg-color);
+}
+
+/* Split view: the active pane gets an accent rule under its heading. */
+paned.split > .pane.active .pane-heading {
+  box-shadow: inset 0 -2px var(--accent-bg-color);
+}
+
+paned.split > .pane.inactive .pane-title {
+  font-weight: 700;
+}
+
+.filter-bar {
+  padding: 8px 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* -------------------------------------------------------------- grids */
+
+gridview.file-grid {
+  background: transparent;
+  padding: 4px 16px 24px 16px;
+}
+
+gridview.file-grid > child {
+  border-radius: 12px;
+  margin: 3px;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+gridview.file-grid > child:hover {
+  background: color-mix(in srgb, var(--view-fg-color) 5%, transparent);
+}
+
+gridview.file-grid > child:selected {
+  background: var(--tuck-selection-bg);
+  color: inherit;
+}
+
+gridview.file-grid > child:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: -2px;
+}
+
+gridview.icons .tile {
+  padding: 12px 6px 10px 6px;
+}
+
+gridview.icons .tile-name {
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 0.92em;
+}
+
+/* Finder-style: the selected name becomes an accent pill. */
+gridview.icons > child:selected .tile-name {
+  background: var(--accent-bg-color);
+  color: var(--accent-fg-color);
+}
+
+gridview.compact .tile {
+  padding: 5px 10px;
+  min-height: 28px;
+}
+
+/* ------------------------------------------------------------ details */
+
+columnview.file-details {
+  background: transparent;
+}
+
+columnview.file-details > listview {
+  background: transparent;
+  padding: 0 8px 24px 8px;
+}
+
+columnview.file-details > listview > row {
+  border-radius: 8px;
+  min-height: 34px;
+}
+
+columnview.file-details > listview > row:selected {
+  background: var(--tuck-selection-bg);
+  color: inherit;
+}
+
+columnview.file-details > header > button {
+  font-weight: 600;
+  padding: 6px 10px;
+}
+
+.group-header {
+  font-weight: 700;
+  font-size: 0.88em;
+  padding: 12px 10px 4px 10px;
+  color: var(--accent-color);
+}
+
+/* --------------------------------------------------------- info panel */
+
+.info-split > .sidebar-pane,
+.info-panel {
+  background: var(--sidebar-bg-color);
+}
+
+.info-panel {
+  padding: 28px 20px 24px 20px;
+}
+
+.info-icon {
+  margin-bottom: 10px;
+}
+
+.info-name {
+  font-size: 1.15em;
+  font-weight: 800;
+}
+
+.info-kind {
+  font-size: 0.9em;
+  color: var(--tuck-sidebar-dim-fg);
+}
+
+.info-heading {
+  font-weight: 700;
+  font-size: 0.9em;
+  margin-bottom: 6px;
+}
+
+.info-key {
+  font-size: 0.88em;
+  color: var(--tuck-sidebar-dim-fg);
+}
+
+.info-value {
+  font-size: 0.88em;
+}
+
+/* ---------------------------------------------------------- operations */
+
+.drop-target {
+  outline: 2px dashed var(--accent-color);
+  outline-offset: -2px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent-bg-color) 14%, transparent);
+}
+
+.job-list {
+  padding: 12px;
+}
+
+.job-title {
+  font-weight: 600;
+}
+
+.job-detail {
+  font-size: 0.85em;
+}
+
+/* ------------------------------------------------------------ previews */
+
+image.thumbnail {
+  border-radius: 6px;
+}
+
+.quicklook-content {
+  background: var(--view-bg-color);
+}
+
+.pdf-page {
+  box-shadow: 0 2px 10px alpha(black, 0.25);
+  background: white;
+}
+
+.ql-note {
+  padding: 8px 16px;
+}
+
+/* -------------------------------------------------------------- search */
+
+.search-bar {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* ------------------------------------------------------- dim text in GTK */
+
+.dim-label {
+  color: var(--tuck-dim-fg);
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------- density */
+
+window.density-compact gridview.icons .tile { padding: 6px 4px 6px 4px; }
+window.density-compact gridview.compact .tile { padding: 2px 8px; min-height: 22px; }
+window.density-compact columnview.file-details > listview > row { min-height: 26px; }
+window.density-compact .tuck-sidebar .places > row,
+window.density-compact .tuck-sidebar .places > row { min-height: 28px; }
+window.density-compact .pane-heading { padding: 10px 18px 6px 18px; }
+
+window.density-spacious gridview.icons .tile { padding: 18px 10px 14px 10px; }
+window.density-spacious gridview.compact .tile { padding: 9px 14px; min-height: 36px; }
+window.density-spacious columnview.file-details > listview > row { min-height: 44px; }
+window.density-spacious .tuck-sidebar .places > row,
+window.density-spacious .tuck-sidebar .places > row { min-height: 42px; }
+window.density-spacious .pane-heading { padding: 26px 30px 14px 30px; }
+
+/* ------------------------------------------------------ Material icons */
+
+/* Symbolic icons take the accent colour; on accent backgrounds they
+   follow the text colour so they stay readable. */
+window.icons-material image:not(.thumbnail) { color: var(--accent-color); }
+window.icons-material row:selected image,
+window.icons-material button.suggested-action image,
+window.icons-material button.destructive-action image,
+window.icons-material gridview > child:selected image:not(.thumbnail) { color: inherit; }
+
+/* ------------------------------------------------------------ focus */
+
+*:focus-visible { outline-color: var(--accent-color); }
+
+/* ---- info panel: rating, tags, comment */
+.info-meta .rating button.star {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 2px;
+  color: var(--tuck-sidebar-dim-fg);
+}
+
+.info-meta .rating button.star.on {
+  color: var(--accent-color);
+}
+
+.tag-chip {
+  background: color-mix(in srgb, var(--accent-bg-color) 18%, transparent);
+  border-radius: 999px;
+  padding: 1px 2px 1px 10px;
+}
+
+.tag-chip button {
+  min-width: 20px;
+  min-height: 20px;
+  padding: 0;
+}
+
+.tag-chips flowboxchild {
+  padding: 0;
+}
+
+/* ---- git status dots */
+.git-badge {
+  min-width: 9px;
+  min-height: 9px;
+  border-radius: 999px;
+  margin: 2px;
+  box-shadow: 0 0 0 2px var(--view-bg-color);
+}
+.git-badge.git-modified { background: var(--warning-color); }
+.git-badge.git-added { background: var(--success-color); }
+.git-badge.git-renamed { background: var(--accent-color); }
+.git-badge.git-deleted, .git-badge.git-conflict { background: var(--error-color); }
+.git-badge.git-untracked { background: var(--tuck-sidebar-dim-fg); }
+
+/* ---- Preferences: theme and icon cards */
+button.pick-card {
+  padding: 8px 8px 10px 8px;
+  border-radius: 16px;
+  background: none;
+  box-shadow: inset 0 0 0 1px alpha(currentColor, 0.08);
+}
+button.pick-card:hover {
+  background: alpha(currentColor, 0.05);
+}
+button.pick-card:checked {
+  background: color-mix(in srgb, var(--accent-bg-color) 12%, transparent);
+  box-shadow: inset 0 0 0 2px var(--accent-bg-color);
+  color: inherit;
+}
+button.pick-card .card-title {
+  font-weight: 600;
+}
+button.pick-card .icon-sample {
+  margin: 8px 0 4px 0;
+}
+.accent-default-mark {
+  font-weight: 800;
+  font-size: 0.85em;
+}

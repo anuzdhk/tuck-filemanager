@@ -1,0 +1,18 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+<!-- Tuck app icon. Artwork supplied by the author, centred on a square canvas. -->
+<g transform="translate(64.00 145.30) scale(0.874146)">
+<path d="M0.500108 48.5L0.5 437.603V790.5C0.5 817.01 21.9903 838.5 48.5 838.5H976.5C1003.01 838.5 1024.5 817.01 1024.5 790.5V153.971C1024.5 127.462 1003.01 105.971 976.5 105.971H532.209C511.783 105.971 493.595 93.0455 486.878 73.7561L472.587 32.7154C465.871 13.426 447.682 0.5 427.257 0.5H48.5001C21.9904 0.5 0.500116 21.9903 0.500108 48.5Z" fill="#1A80F4" stroke="black"/>
+<path d="M75.5 195H950.5C962.374 195 972 204.626 972 216.5V729.5C972 741.374 962.374 751 950.5 751H75.5C63.6259 751 54 741.374 54 729.5V216.5C54 204.626 63.6259 195 75.5 195Z" fill="#FFFAEB" stroke="white"/>
+<rect x="123.5" y="250.5" width="779" height="45" rx="22.5" fill="#D9D9D9"/>
+<rect x="123.5" y="318.5" width="609" height="46" rx="23" fill="#D9D9D9"/>
+<rect x="123.5" y="461.5" width="609" height="44" rx="22" fill="#D9D9D9"/>
+<rect x="123.5" y="387.5" width="757" height="45" rx="22.5" fill="#D9D9D9"/>
+<rect x="0.5" y="295.5" width="1023" height="543" rx="49" fill="url(#paint0_linear_7_22)"/>
+<defs>
+<linearGradient id="paint0_linear_7_22" x1="512" y1="295.5" x2="512" y2="838.5" gradientUnits="userSpaceOnUse">
+<stop stop-color="#80C6FF"/>
+<stop offset="1" stop-color="#045699" stop-opacity="0.69"/>
+</linearGradient>
+</defs>
+</g>
+</svg>

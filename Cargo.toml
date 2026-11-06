@@ -1,13 +1,13 @@
 [workspace]
 resolver = "3"
-members = ["crates/kivo-core", "crates/kivo"]
+members = ["crates/tuck-core", "crates/tuck"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 authors = ["anuzdhk"]
-repository = "https://github.com/anuzdhk/file-manager"
+repository = "https://github.com/anuzdhk/kivo-filemanager"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
