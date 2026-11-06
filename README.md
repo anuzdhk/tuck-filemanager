@@ -10,6 +10,7 @@ Dolphin's power with a calm, simple design: Quick Look, instant search, one-clic
 [![Stars](https://img.shields.io/github/stars/anuzdhk/kivo-filemanager?style=for-the-badge&logo=github&label=Stars)](https://github.com/anuzdhk/kivo-filemanager/stargazers)
 [![Watchers](https://img.shields.io/github/watchers/anuzdhk/kivo-filemanager?style=for-the-badge&logo=github&label=Watching)](https://github.com/anuzdhk/kivo-filemanager/watchers)
 [![Forks](https://img.shields.io/github/forks/anuzdhk/kivo-filemanager?style=for-the-badge&logo=github&label=Forks)](https://github.com/anuzdhk/kivo-filemanager/forks)
+[![Views](https://hits.sh/github.com/anuzdhk/kivo-filemanager.svg?style=for-the-badge&label=Views&color=1a80f4)](https://hits.sh/github.com/anuzdhk/kivo-filemanager/)
 <br>
 [![Latest release](https://img.shields.io/github/v/release/anuzdhk/kivo-filemanager?style=for-the-badge&label=Release)](https://github.com/anuzdhk/kivo-filemanager/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/anuzdhk/kivo-filemanager/ci.yml?branch=feat%2Fstrata&style=for-the-badge&label=CI)](https://github.com/anuzdhk/kivo-filemanager/actions/workflows/ci.yml)
