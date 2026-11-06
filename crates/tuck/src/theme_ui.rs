@@ -60,6 +60,7 @@ pub const UI_ICONS: &[(&str, &str, &str)] = &[
     ("star-filled", "star-filled", "star-fill"),
     ("tag", "tag", "sell"),
     ("server", "server", "hard_drive"),
+    ("cleaner", "sparkles", "cleaning_services"),
 ];
 
 /// System icon style: the standard freedesktop names for each UI icon, best
@@ -104,6 +105,7 @@ const SYSTEM_UI: &[(&str, &[&str])] = &[
     ("star-filled", &["starred-symbolic"]),
     ("tag", &["tag-symbolic", "bookmark-new-symbolic"]),
     ("server", &["network-server-symbolic"]),
+    ("cleaner", &["edit-clear-all-symbolic", "user-trash-full-symbolic"]),
 ];
 
 /// The file holding `names[0..]` in the desktop's icon theme, if any:

@@ -209,6 +209,8 @@ pub struct AppSettings {
     pub check_updates: bool,
     /// Last automatic check (Unix seconds).
     pub last_update_check: i64,
+    /// Sidebar width in pixels, set by dragging its edge.
+    pub sidebar_width: f64,
 }
 
 impl Default for AppSettings {
@@ -223,6 +225,7 @@ impl Default for AppSettings {
             shortcuts: Default::default(),
             check_updates: false,
             last_update_check: 0,
+            sidebar_width: 240.0,
         }
     }
 }

@@ -432,3 +432,44 @@ button.pick-card .icon-sample {
   font-weight: 800;
   font-size: 0.85em;
 }
+
+/* ---- sidebar resize handle: invisible until hovered */
+.sidebar-resize {
+  background: transparent;
+}
+.sidebar-resize:hover {
+  background: linear-gradient(to right, transparent 3px, alpha(var(--accent-bg-color), 0.6) 3px, alpha(var(--accent-bg-color), 0.6) 5px, transparent 5px);
+}
+
+/* ---- drive rows: name, a slim usage bar, free space */
+.tuck-sidebar .places > row .drive-row {
+  padding: 5px 0;
+}
+.drive-bar trough {
+  min-height: 4px;
+}
+
+/* ---- Preferences › Storage */
+.storage-card {
+  padding: 16px 18px;
+}
+.storage-big trough {
+  min-height: 12px;
+  border-radius: 99px;
+}
+
+/* ---- sidebar bottom bar */
+.sidebar-tools {
+  margin: 6px 12px 12px 12px;
+  padding: 4px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sidebar-fg-color) 6%, transparent);
+}
+.sidebar-tools button.sidebar-tool {
+  min-height: 34px;
+  min-width: 40px;
+  border-radius: 9px;
+}
+.sidebar-tools button.sidebar-tool buttoncontent {
+  font-weight: 600;
+}

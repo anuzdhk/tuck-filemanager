@@ -120,6 +120,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           v="${GITHUB_REF_NAME#v}"
-          # Notes: the newest release's text from the AppStream file.
-          notes=$(sed -n '/<release version="'"$v"'"/,/<\/release>/p' data/desktop/io.github.anuzdhk.Tuck.metainfo.xml | sed -n 's/.*<p>\(.*\)<\/p>.*/\1/p')
-          gh release create "$GITHUB_REF_NAME" dist/* --title "Tuck $v" --notes "${notes:-Tuck $v}"
+          # Notes: docs/releases/<version>.md if written (with screenshots),
+          # otherwise the newest release's text from the AppStream file.
+          if [ -f "docs/releases/$v.md" ]; then
+            gh release create "$GITHUB_REF_NAME" dist/* --title "Tuck $v" --notes-file "docs/releases/$v.md"
+          else
+            notes=$(sed -n '/<release version="'"$v"'"/,/<\/release>/p' data/desktop/io.github.anuzdhk.Tuck.metainfo.xml | sed -n 's/.*<p>\(.*\)<\/p>.*/\1/p')
+            gh release create "$GITHUB_REF_NAME" dist/* --title "Tuck $v" --notes "${notes:-Tuck $v}"
+          fi

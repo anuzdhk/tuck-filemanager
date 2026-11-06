@@ -139,6 +139,33 @@ fn step_once(app: &adw::Application, s: &str) {
         }
         return;
     }
+    if let Some(label) = s.strip_prefix("click-last:") {
+        // Like click:, but the last match (e.g. a dialog's button on top).
+        fn all(w: &gtk::Widget, label: &str, out: &mut Vec<gtk::Button>) {
+            if let Some(b) = w.downcast_ref::<gtk::Button>()
+                && b.is_visible()
+                && b.label().as_deref() == Some(label)
+            {
+                out.push(b.clone());
+            }
+            let mut c = w.first_child();
+            while let Some(ch) = c {
+                if ch.is_visible() {
+                    all(&ch, label, out);
+                }
+                c = ch.next_sibling();
+            }
+        }
+        if let Some(w) = win.as_ref() {
+            let mut found = Vec::new();
+            all(w.upcast_ref(), label, &mut found);
+            match found.last() {
+                Some(b) => b.emit_clicked(),
+                None => eprintln!("click-last: no button labelled {label:?}"),
+            }
+        }
+        return;
+    }
     if let Some(label) = s.strip_prefix("click:") {
         // Press the first visible button with this label (window or dialog).
         fn find(w: &gtk::Widget, label: &str) -> Option<gtk::Button> {

@@ -3,6 +3,7 @@
 
 mod appearance_ui;
 mod breadcrumb;
+mod cleaner_ui;
 mod debug;
 mod dialogs;
 mod jobs;
@@ -14,6 +15,7 @@ mod quicklook;
 mod search_ui;
 mod searchbar;
 mod services_ui;
+mod storage_ui;
 mod terminal_ui;
 mod theme_ui;
 mod update_ui;

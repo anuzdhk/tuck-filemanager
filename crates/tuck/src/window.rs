@@ -76,6 +76,10 @@ pub struct Inner {
 #[derive(Clone)]
 pub struct Window(Rc<Inner>);
 
+const SIDEBAR_MIN: f64 = 180.0;
+const SIDEBAR_DEFAULT: f64 = 240.0;
+const SIDEBAR_MAX: f64 = 420.0;
+
 thread_local! {
     /// Open windows. GTK owns the widgets; this keeps our state alive until
     /// the window closes.
@@ -234,11 +238,23 @@ impl Window {
         let select_bar = gtk::Revealer::builder().child(&bar).transition_type(gtk::RevealerTransitionType::SlideUp).build();
         content_tv.add_bottom_bar(&select_bar);
 
+        // Drag the sidebar's right edge to resize it.
+        let sidebar_box = gtk::Overlay::builder().child(&sidebar_tv).build();
+        let resize_handle = gtk::Box::builder()
+            .width_request(8)
+            .halign(gtk::Align::End)
+            .valign(gtk::Align::Fill)
+            .css_classes(["sidebar-resize"])
+            .cursor(&gdk::Cursor::from_name("col-resize", None).expect("cursor"))
+            .tooltip_text("Drag to resize, double-click to reset")
+            .build();
+        sidebar_box.add_overlay(&resize_handle);
         let outer = adw::OverlaySplitView::builder()
-            .sidebar(&sidebar_tv)
+            .sidebar(&sidebar_box)
             .content(&content_tv)
-            .min_sidebar_width(200.0)
-            .max_sidebar_width(280.0)
+            .min_sidebar_width(SIDEBAR_DEFAULT)
+            .max_sidebar_width(SIDEBAR_DEFAULT)
+            .sidebar_width_fraction(1.0)
             .build();
         outer
             .bind_property("show-sidebar", &sidebar_toggle, "active")
@@ -345,6 +361,7 @@ impl Window {
                 }
             }
         });
+        win.setup_sidebar_resize(&resize_handle);
         win.setup_actions();
         win.setup_file_actions();
         win.wire();
@@ -371,6 +388,69 @@ impl Window {
         WINDOWS.with(|w| w.borrow_mut().push(win.clone()));
         win.restyle();
         win
+    }
+
+    /// The widest the sidebar may get: leave room for the file view (and
+    /// the information panel when it's beside it).
+    fn sidebar_max(&self) -> f64 {
+        let w = self.0.window.width() as f64;
+        if w <= 0.0 {
+            return SIDEBAR_MAX;
+        }
+        let info = if self.0.info_split.shows_sidebar() && !self.0.info_split.is_collapsed() { self.0.info_split.max_sidebar_width() } else { 0.0 };
+        (w - info - 440.0).clamp(SIDEBAR_MIN, SIDEBAR_MAX)
+    }
+
+    fn set_sidebar_width(&self, width: f64) {
+        let w = width.clamp(SIDEBAR_MIN, self.sidebar_max()).round();
+        self.0.outer.set_min_sidebar_width(w);
+        self.0.outer.set_max_sidebar_width(w);
+    }
+
+    fn setup_sidebar_resize(&self, handle: &gtk::Box) {
+        self.set_sidebar_width(crate::theme_ui::settings().sidebar_width);
+        let drag = gtk::GestureDrag::new();
+        let start = Rc::new(Cell::new(0.0));
+        let (weak, s) = (self.downgrade(), start.clone());
+        drag.connect_drag_begin(move |_, _, _| {
+            if let Some(w) = Window::from_weak(&weak) {
+                s.set(w.0.outer.max_sidebar_width());
+            }
+        });
+        let (weak, s) = (self.downgrade(), start.clone());
+        drag.connect_drag_update(move |_, dx, _| {
+            if let Some(w) = Window::from_weak(&weak) {
+                w.set_sidebar_width(s.get() + dx);
+            }
+        });
+        let weak = self.downgrade();
+        drag.connect_drag_end(move |_, _, _| {
+            if let Some(w) = Window::from_weak(&weak) {
+                let width = w.0.outer.max_sidebar_width();
+                crate::theme_ui::update_quiet(|s| s.sidebar_width = width);
+            }
+        });
+        handle.add_controller(drag);
+        // Double-click: back to the default width.
+        let click = gtk::GestureClick::new();
+        let weak = self.downgrade();
+        click.connect_pressed(move |_, n, _, _| {
+            if n == 2 && let Some(w) = Window::from_weak(&weak) {
+                w.set_sidebar_width(SIDEBAR_DEFAULT);
+                crate::theme_ui::update_quiet(|s| s.sidebar_width = SIDEBAR_DEFAULT);
+            }
+        });
+        handle.add_controller(click);
+        // A smaller window can't keep a wide sidebar.
+        let weak = self.downgrade();
+        self.0.window.connect_default_width_notify(move |_| {
+            if let Some(w) = Window::from_weak(&weak) {
+                let cur = w.0.outer.max_sidebar_width();
+                if cur > w.sidebar_max() {
+                    w.set_sidebar_width(cur);
+                }
+            }
+        });
     }
 
     pub(crate) fn downgrade(&self) -> Weak<Inner> {
@@ -975,6 +1055,7 @@ impl Window {
             w.0.sidebar.add_bookmark(&dir);
         }));
         add("connect-server", Box::new(|w| w.connect_to_server()));
+        add("cleaner", Box::new(|w| crate::cleaner_ui::show(&w.0.window)));
         // Details columns: one toggle per optional column.
         for (id, ..) in tuck_core::settings::COLUMNS {
             let a = gio::SimpleAction::new_stateful(&format!("column-{id}"), None, &true.to_variant());
@@ -1344,6 +1425,7 @@ fn main_menu() -> gio::Menu {
     let places = gio::Menu::new();
     places.append(Some("Add to Places"), Some("win.add-to-places"));
     places.append(Some("Connect to Server…"), Some("win.connect-server"));
+    places.append(Some("Cleaner…"), Some("win.cleaner"));
     menu.append_section(None, &places);
     let panels = gio::Menu::new();
     panels.append(Some("Folders Panel"), Some("win.toggle-folders"));

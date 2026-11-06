@@ -6,6 +6,7 @@
 
 pub mod archive;
 pub mod bookmarks;
+pub mod cleaner;
 pub mod entry;
 pub mod format;
 pub mod git;

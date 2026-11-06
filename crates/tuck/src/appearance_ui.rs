@@ -228,14 +228,11 @@ fn fill_themes(flow: &gtk::FlowBox) {
     }
 }
 
-/// Focus the first selected choice on the page (the accent, near the top),
-/// so the page opens at the top rather than wherever GTK puts focus.
+/// Focus the first setting (Text Size), so the page opens at the top
+/// rather than wherever GTK puts focus.
 pub fn focus_current(page: &adw::PreferencesPage) {
-    fn find(w: &gtk::Widget) -> Option<gtk::ToggleButton> {
-        if let Some(t) = w.downcast_ref::<gtk::ToggleButton>()
-            && (t.has_css_class("pick-card") || t.has_css_class("accent-swatch"))
-            && t.is_active()
-        {
+    fn find(w: &gtk::Widget) -> Option<adw::SpinRow> {
+        if let Some(t) = w.downcast_ref::<adw::SpinRow>() {
             return Some(t.clone());
         }
         let mut c = w.first_child();
@@ -351,7 +348,6 @@ pub fn page(dialog: &adw::PreferencesDialog) -> adw::PreferencesPage {
     });
     swatches.append(&custom);
     accent.add(&swatches);
-    page.add(&accent);
 
     // ------------------------------------------------------------ icons
     let icons = adw::PreferencesGroup::builder()
@@ -401,7 +397,6 @@ pub fn page(dialog: &adw::PreferencesDialog) -> adw::PreferencesPage {
         }
     }));
     icons.add(&icon_flow);
-    page.add(&icons);
 
     // ------------------------------------------------------ readability
     let access = adw::PreferencesGroup::builder().title("Readability").build();
@@ -494,6 +489,8 @@ pub fn page(dialog: &adw::PreferencesDialog) -> adw::PreferencesPage {
     custom_group.add(&reload);
     custom_group.add(&errors_box);
     page.add(&themes);
+    page.add(&accent);
+    page.add(&icons);
     page.add(&custom_group);
     page
 }

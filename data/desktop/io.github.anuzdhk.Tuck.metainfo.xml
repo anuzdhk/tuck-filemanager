@@ -55,6 +55,11 @@
   </supports>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.2" date="2026-11-06">
+      <description>
+        <p>Cleaner, drive usage in the sidebar, Storage in Preferences, resizable sidebar, Quick Look header fix</p>
+      </description>
+    </release>
     <release version="0.1.1" date="2026-11-06">
       <description>
         <p>AppImage now follows Tuck's own styling and runs natively on Wayland; one-line curl installer; debug packages no longer published</p>

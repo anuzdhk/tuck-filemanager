@@ -7,6 +7,8 @@
 - `material/`: [Material Symbols](https://github.com/google/material-design-icons)
   Rounded, Apache-2.0 (`LICENSES/material-symbols-Apache-2.0.txt`). Unmodified.
 
+Added since: Tabler `sparkles` and Material `cleaning_services` (the Cleaner).
+
 Tuck's folder and document icons are original artwork generated in code
 (`crates/tuck-core/src/icons.rs`); emblems reuse the Tabler glyphs above.
 

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Places sidebar: user folders, locations, devices (mount / unmount), and a
-//! storage indicator for the home file system.
+//! space used on each drive.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -8,7 +8,7 @@ use std::rc::Rc;
 use adw::prelude::*;
 use gtk::{gio, glib};
 use tuck_core::format;
-use tuck_core::paths::{self, UserDir, UserDirs};
+use tuck_core::paths::{UserDir, UserDirs};
 
 #[derive(Clone)]
 enum Target {
@@ -32,10 +32,6 @@ pub struct Inner {
     list: gtk::ListBox,
     rows: RefCell<Vec<(gtk::ListBoxRow, Option<Target>)>>,
     monitor: gio::VolumeMonitor,
-    storage_label: gtk::Label,
-    storage_value: gtk::Label,
-    storage_bar: gtk::LevelBar,
-    storage_detail: gtk::Label,
     stack: gtk::Stack,
     folders: crate::folders_ui::FoldersPanel,
     folders_button: gtk::ToggleButton,
@@ -67,25 +63,6 @@ impl Sidebar {
             .hscrollbar_policy(gtk::PolicyType::Never)
             .build();
 
-        let storage_label = gtk::Label::builder().xalign(0.0).hexpand(true).css_classes(["storage-title"]).build();
-        let storage_value = gtk::Label::builder().xalign(1.0).css_classes(["storage-title", "numeric"]).build();
-        let top = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-        top.append(&storage_label);
-        top.append(&storage_value);
-        let storage_bar = gtk::LevelBar::builder().min_value(0.0).max_value(1.0).css_classes(["storage-bar"]).build();
-        storage_bar.remove_offset_value(Some(gtk::LEVEL_BAR_OFFSET_LOW));
-        storage_bar.remove_offset_value(Some(gtk::LEVEL_BAR_OFFSET_HIGH));
-        storage_bar.remove_offset_value(Some(gtk::LEVEL_BAR_OFFSET_FULL));
-        let storage_detail = gtk::Label::builder().xalign(0.0).css_classes(["storage-detail"]).build();
-        let storage = gtk::Box::builder()
-            .orientation(gtk::Orientation::Vertical)
-            .spacing(6)
-            .css_classes(["storage"])
-            .build();
-        storage.append(&top);
-        storage.append(&storage_bar);
-        storage.append(&storage_detail);
-
         let root = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .css_classes(["tuck-sidebar"])
@@ -102,17 +79,33 @@ impl Sidebar {
         switcher.append(&folders_button);
         root.append(&switcher);
         root.append(&stack);
-        root.append(&storage);
+        // Bottom bar: Preferences, Search, Cleaner.
+        // Bottom bar: | ⚙ Preferences | ✨ |
+        let tools = gtk::Box::builder().spacing(6).css_classes(["sidebar-tools"]).build();
+        let prefs = gtk::Button::builder()
+            .child(&adw::ButtonContent::builder().icon_name("tuck-preferences-symbolic").label("Preferences").build())
+            .tooltip_text("Preferences (Ctrl+,)")
+            .action_name("app.preferences")
+            .hexpand(true)
+            .css_classes(["flat", "sidebar-tool"])
+            .build();
+        let cleaner = gtk::Button::builder()
+            .icon_name("tuck-cleaner-symbolic")
+            .tooltip_text("Cleaner")
+            .action_name("win.cleaner")
+            .css_classes(["flat", "sidebar-tool"])
+            .build();
+        cleaner.update_property(&[gtk::accessible::Property::Label("Cleaner")]);
+        tools.append(&prefs);
+        tools.append(&gtk::Separator::builder().orientation(gtk::Orientation::Vertical).margin_top(6).margin_bottom(6).build());
+        tools.append(&cleaner);
+        root.append(&tools);
 
         let sb = Sidebar(Rc::new(Inner {
             root,
             list,
             rows: RefCell::new(Vec::new()),
             monitor: gio::VolumeMonitor::get(),
-            storage_label,
-            storage_value,
-            storage_bar,
-            storage_detail,
             stack,
             folders,
             folders_button: folders_button.clone(),
@@ -145,7 +138,6 @@ impl Sidebar {
         });
         sb.wire();
         sb.rebuild();
-        sb.refresh_storage();
         sb
     }
 
@@ -386,7 +378,16 @@ impl Sidebar {
         self.place(&mut rows, "Trash", "tuck-trash-symbolic", Target::File(gio::File::for_uri("trash:///")), None);
 
         // The user's own places (GTK bookmarks, shared with other apps).
-        let marks = tuck_core::bookmarks::load();
+        // Skip bookmarks already shown under Places (GNOME adds Documents,
+        // Music… to the shared bookmarks file on every new account).
+        let in_places: Vec<gio::File> = UserDir::SIDEBAR.iter().filter_map(|d| dirs.get(*d)).map(gio::File::for_path).collect();
+        let marks: Vec<_> = tuck_core::bookmarks::load()
+            .into_iter()
+            .filter(|b| {
+                let f = gio::File::for_uri(&b.uri);
+                !in_places.iter().any(|p| p.equal(&f))
+            })
+            .collect();
         let mut bookmark_rows = Vec::new();
         if !marks.is_empty() {
             self.heading(&mut rows, "Bookmarks");
@@ -403,7 +404,7 @@ impl Sidebar {
         *self.0.bookmark_rows.borrow_mut() = bookmark_rows;
 
         self.heading(&mut rows, "Locations");
-        self.place(&mut rows, "Computer", "tuck-drive-symbolic", Target::File(gio::File::for_path("/")), None);
+        self.place_drive(&mut rows, "Computer", "tuck-drive-symbolic", Target::File(gio::File::for_path("/")), None, Some(gio::File::for_path("/")));
         self.place(&mut rows, "Network", "tuck-server-symbolic", Target::File(gio::File::for_uri("network:///")), None);
         self.place(&mut rows, "Connect to Server…", "tuck-link-symbolic", Target::Connect, None);
 
@@ -430,7 +431,11 @@ impl Sidebar {
         if !devices.is_empty() {
             self.heading(&mut rows, "Devices");
             for (name, icon, target, mount) in devices {
-                self.place(&mut rows, &name, &icon, target, mount);
+                let usage = match &target {
+                    Target::File(f) => Some(f.clone()),
+                    _ => None,
+                };
+                self.place_drive(&mut rows, &name, &icon, target, mount, usage);
             }
         }
 
@@ -470,9 +475,38 @@ impl Sidebar {
         target: Target,
         mount: Option<gio::Mount>,
     ) {
+        self.place_drive(rows, label, icon, target, mount, None);
+    }
+
+    /// A row; with `usage`, a drive row that also shows how full it is.
+    fn place_drive(
+        &self,
+        rows: &mut Vec<(gtk::ListBoxRow, Option<Target>)>,
+        label: &str,
+        icon: &str,
+        target: Target,
+        mount: Option<gio::Mount>,
+        usage: Option<gio::File>,
+    ) {
         let b = gtk::Box::builder().spacing(10).build();
         b.append(&gtk::Image::from_icon_name(icon));
-        b.append(&gtk::Label::builder().label(label).xalign(0.0).hexpand(true).ellipsize(gtk::pango::EllipsizeMode::End).build());
+        let name = gtk::Label::builder().label(label).xalign(0.0).hexpand(true).ellipsize(gtk::pango::EllipsizeMode::End).build();
+        match usage {
+            Some(file) => {
+                let col = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(3).hexpand(true).valign(gtk::Align::Center).css_classes(["drive-row"]).build();
+                col.append(&name);
+                let bar = gtk::LevelBar::builder().min_value(0.0).max_value(1.0).css_classes(["storage-bar", "drive-bar"]).build();
+                for o in [gtk::LEVEL_BAR_OFFSET_LOW, gtk::LEVEL_BAR_OFFSET_HIGH, gtk::LEVEL_BAR_OFFSET_FULL] {
+                    bar.remove_offset_value(Some(o));
+                }
+                let detail = gtk::Label::builder().xalign(0.0).ellipsize(gtk::pango::EllipsizeMode::End).css_classes(["storage-detail"]).build();
+                col.append(&bar);
+                col.append(&detail);
+                b.append(&col);
+                fill_usage(file, bar, detail);
+            }
+            None => b.append(&name),
+        }
         if let Some(m) = mount.filter(|m| m.can_unmount() || m.can_eject()) {
             let eject = gtk::Button::builder()
                 .icon_name("tuck-eject-symbolic")
@@ -564,44 +598,32 @@ impl Sidebar {
             mount.unmount_with_operation(gio::MountUnmountFlags::NONE, Some(&op), gio::Cancellable::NONE, done);
         }
     }
+}
 
-    pub fn refresh_storage(&self) {
-        let home = gio::File::for_path(paths::home());
-        let weak = Rc::downgrade(&self.0);
-        glib::MainContext::default().spawn_local(async move {
-            let info = home
-                .query_filesystem_info_future("filesystem::size,filesystem::free", glib::Priority::LOW)
-                .await;
-            let Some(inner) = weak.upgrade() else { return };
-            let Ok(info) = info else {
-                inner.storage_label.set_label("Storage");
-                inner.storage_detail.set_label("Unavailable");
-                return;
-            };
-            let size = info.attribute_uint64("filesystem::size");
-            let free = info.attribute_uint64("filesystem::free");
-            let used = size.saturating_sub(free);
-            let frac = if size > 0 { used as f64 / size as f64 } else { 0.0 };
-            inner.storage_label.set_label("Storage");
-            inner.storage_value.set_label(&format!("{:.0}%", frac * 100.0));
-            inner.storage_bar.set_value(frac);
-            if frac > 0.9 {
-                inner.storage_bar.add_css_class("nearly-full");
-            } else {
-                inner.storage_bar.remove_css_class("nearly-full");
-            }
-            inner.storage_detail.set_label(&format!(
-                "{} of {} used · {} free",
-                format::size(used),
-                format::size(size),
-                format::size(free)
-            ));
-            inner.storage_bar.update_property(&[gtk::accessible::Property::Label(&format!(
-                "Storage {:.0}% used",
-                frac * 100.0
-            ))]);
-        });
-    }
+/// Fill a drive row's bar and "X free of Y" once the numbers are in.
+fn fill_usage(file: gio::File, bar: gtk::LevelBar, detail: gtk::Label) {
+    glib::MainContext::default().spawn_local(async move {
+        let Ok(info) = file.query_filesystem_info_future("filesystem::size,filesystem::free", glib::Priority::LOW).await else {
+            bar.set_visible(false);
+            detail.set_visible(false);
+            return;
+        };
+        let size = info.attribute_uint64("filesystem::size");
+        let free = info.attribute_uint64("filesystem::free");
+        if size == 0 {
+            bar.set_visible(false);
+            detail.set_visible(false);
+            return;
+        }
+        let used = size.saturating_sub(free);
+        let frac = used as f64 / size as f64;
+        bar.set_value(frac);
+        if frac > 0.9 {
+            bar.add_css_class("nearly-full");
+        }
+        detail.set_label(&format!("{} free of {}", format::size(free), format::size(size)));
+        bar.update_property(&[gtk::accessible::Property::Label(&format!("{:.0}% used", frac * 100.0))]);
+    });
 }
 
 fn user_dir_icon(d: UserDir) -> &'static str {

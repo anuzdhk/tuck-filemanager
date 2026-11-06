@@ -94,8 +94,11 @@ impl QuickLook {
             .hide_on_close(true)
             .title("Quick Look")
             .content(&tv)
-            .css_classes(["quicklook"])
             .build();
+        // Add, don't replace: the window's default `background` class is
+        // what paints it (without it the area behind the header shows the
+        // desktop).
+        win.add_css_class("quicklook");
 
         let ql = QuickLook(Rc::new(Inner {
             win,

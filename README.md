@@ -87,6 +87,8 @@ Grab the file for your system from the [latest release](https://github.com/anuzd
 - Git status dots on changed files
 - Undo and redo for every file operation; nothing is ever deleted by an undo
 - Bookmarks, network shares (SFTP, SMB, FTP, WebDAV), mounting and ejecting drives
+- **Cleaner**: free space by clearing caches that are safe to delete (previews, browser and package caches); it never touches your files, and skips a browser's cache while it's open
+- See how full each drive is right in the sidebar, with details in Preferences › Storage
 
 **Make it yours**
 - 10 themes plus your own, any accent colour, text that always stays readable
@@ -103,8 +105,11 @@ Grab the file for your system from the [latest release](https://github.com/anuzd
     <td width="50%"><img src="docs/screenshots/readme/search.png" alt="Searching the home folder"><br><sub><b>Search</b> results as you type, with kind, date and size filters</sub></td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/readme/theme-catppuccin.png" alt="Catppuccin theme"><br><sub><b>Catppuccin</b>, one of 10 built-in themes</sub></td>
-    <td width="50%"><img src="docs/screenshots/readme/preferences-themes.png" alt="Theme gallery in Preferences"><br><sub><b>Preferences</b>: pick a theme from live previews, or add your own</sub></td>
+    <td width="50%"><img src="docs/screenshots/readme/cleaner.png" alt="The Cleaner listing caches that are safe to delete"><br><sub><b>Cleaner</b>: free space from caches that are safe to delete (Catppuccin theme)</sub></td>
+    <td width="50%"><img src="docs/screenshots/readme/quick-look.png" alt="Quick Look previewing an image"><br><sub><b>Quick Look</b>: press Space to preview, arrows for the next file</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/readme/preferences-themes.png" alt="Theme gallery in Preferences"><br><sub><b>Preferences</b>: pick one of 10 themes from live previews, any accent colour, or add your own theme</sub></td>
   </tr>
 </table>
 
