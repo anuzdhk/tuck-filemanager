@@ -19,7 +19,8 @@ jobs:
       - name: Install build dependencies
         run: |
           pacman -Syu --noconfirm --needed base-devel git cargo wget patchelf strace xorg-server-xvfb \
-            gtk4 libadwaita gtksourceview5 poppler-glib libarchive vte4 librsvg hicolor-icon-theme
+            gtk4 libadwaita gtksourceview5 poppler-glib libarchive vte4 librsvg hicolor-icon-theme \
+            gvfs  # bundles its GIO module, so drives, Trash and network shares work
       - uses: actions/checkout@v7
       - name: Build the AppImage
         run: packaging/appimage/build.sh "$PWD/out"
