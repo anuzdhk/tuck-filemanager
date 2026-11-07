@@ -15,8 +15,9 @@ Dolphin's power with a calm, simple design: Quick Look, instant search, one-clic
 [![Latest release](https://img.shields.io/github/v/release/anuzdhk/kivo-filemanager?style=for-the-badge&label=Release)](https://github.com/anuzdhk/kivo-filemanager/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/anuzdhk/kivo-filemanager/ci.yml?branch=feat%2Fstrata&style=for-the-badge&label=CI)](https://github.com/anuzdhk/kivo-filemanager/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-GPL--3.0--or--later-blue?style=for-the-badge)](LICENSE)
+[![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Tuck-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/anujdhakal)
 
-[Install](#install) · [Features](#features) · [Screenshots](#screenshots) · [Shortcuts](#keyboard-shortcuts) · [Themes](#themes) · [Build](#build-from-source)
+[Install](#install) · [Features](#features) · [Screenshots](#screenshots) · [Shortcuts](#keyboard-shortcuts) · [Themes](#themes) · [Build](#build-from-source) · [Support](#support-tuck)
 
 <img src="docs/screenshots/readme/main-light.png" alt="Tuck showing the Pictures folder with the Information panel" width="860">
 
@@ -239,6 +240,14 @@ Tuck was called Kivo during development. On first start it moves Kivo's settings
 </details>
 
 ---
+
+## Support Tuck
+
+Tuck is free and made in spare time. If it saves you time, you can buy me a coffee on Ko-fi:
+
+[![Support Tuck on Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/anujdhakal)
+
+Starring the repository, reporting bugs and telling a friend help too.
 
 ## Credits and license
 
