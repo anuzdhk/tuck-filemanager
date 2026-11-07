@@ -19,6 +19,7 @@ pub struct SearchBar {
     size: gtk::DropDown,
     contents: gtk::ToggleButton,
     status: gtk::Label,
+    results: gtk::Label,
 }
 
 /// (label, min bytes, max bytes)
@@ -61,6 +62,7 @@ impl SearchBar {
             .build();
 
         let status = gtk::Label::builder().xalign(1.0).css_classes(["dim-label", "numeric", "caption"]).build();
+        let results = gtk::Label::builder().xalign(1.0).ellipsize(gtk::pango::EllipsizeMode::End).css_classes(["numeric", "caption-heading"]).build();
 
         let top = gtk::Box::builder().spacing(8).build();
         top.append(&entry);
@@ -72,12 +74,13 @@ impl SearchBar {
         filters.append(&contents);
         let spacer = gtk::Box::builder().hexpand(true).build();
         filters.append(&spacer);
+        filters.append(&results);
         filters.append(&status);
         let col = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(8).css_classes(["search-bar"]).build();
         col.append(&top);
         col.append(&filters);
         let revealer = gtk::Revealer::builder().child(&col).transition_type(gtk::RevealerTransitionType::SlideDown).build();
-        SearchBar { revealer, entry, here, everywhere, kind, date, size, contents, status }
+        SearchBar { revealer, entry, here, everywhere, kind, date, size, contents, status, results }
     }
 
     pub fn connect_changed(&self, f: impl Fn() + 'static) {
@@ -136,6 +139,11 @@ impl SearchBar {
 
     pub fn set_status(&self, s: &str) {
         self.status.set_label(s);
+    }
+
+    /// The result count ("7116 results · 13.7 ms · 2 selected").
+    pub fn set_results(&self, s: &str) {
+        self.results.set_label(s);
     }
 
     /// The query from the text plus the filter controls.

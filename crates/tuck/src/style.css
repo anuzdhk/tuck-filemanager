@@ -528,7 +528,7 @@ button.pick-card,
 
 /* ---- header search field (collapses to a button for long paths) */
 button.search-pill {
-  min-width: 220px;
+  min-width: 190px;
   min-height: 30px;
   padding: 0 10px;
   border-radius: 9px;

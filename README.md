@@ -7,13 +7,13 @@
 **A fast, friendly file manager for Linux.**<br>
 Dolphin's power with a calm, simple design: Quick Look, instant search, one-click archives and app installs built in.
 
-[![Stars](https://img.shields.io/github/stars/anuzdhk/kivo-filemanager?style=for-the-badge&logo=github&label=Stars)](https://github.com/anuzdhk/kivo-filemanager/stargazers)
-[![Watchers](https://img.shields.io/github/watchers/anuzdhk/kivo-filemanager?style=for-the-badge&logo=github&label=Watching)](https://github.com/anuzdhk/kivo-filemanager/watchers)
-[![Forks](https://img.shields.io/github/forks/anuzdhk/kivo-filemanager?style=for-the-badge&logo=github&label=Forks)](https://github.com/anuzdhk/kivo-filemanager/forks)
-[![Views](https://hits.sh/github.com/anuzdhk/kivo-filemanager.svg?style=for-the-badge&label=Views&color=1a80f4)](https://hits.sh/github.com/anuzdhk/kivo-filemanager/)
+[![Stars](https://img.shields.io/github/stars/anuzdhk/tuck-filemanager?style=for-the-badge&logo=github&label=Stars)](https://github.com/anuzdhk/tuck-filemanager/stargazers)
+[![Watchers](https://img.shields.io/github/watchers/anuzdhk/tuck-filemanager?style=for-the-badge&logo=github&label=Watching)](https://github.com/anuzdhk/tuck-filemanager/watchers)
+[![Forks](https://img.shields.io/github/forks/anuzdhk/tuck-filemanager?style=for-the-badge&logo=github&label=Forks)](https://github.com/anuzdhk/tuck-filemanager/forks)
+[![Views](https://hits.sh/github.com/anuzdhk/tuck-filemanager.svg?style=for-the-badge&label=Views&color=1a80f4)](https://hits.sh/github.com/anuzdhk/tuck-filemanager/)
 <br>
-[![Latest release](https://img.shields.io/github/v/release/anuzdhk/kivo-filemanager?style=for-the-badge&label=Release)](https://github.com/anuzdhk/kivo-filemanager/releases/latest)
-[![CI](https://img.shields.io/github/actions/workflow/status/anuzdhk/kivo-filemanager/ci.yml?branch=feat%2Fstrata&style=for-the-badge&label=CI)](https://github.com/anuzdhk/kivo-filemanager/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/anuzdhk/tuck-filemanager?style=for-the-badge&label=Release)](https://github.com/anuzdhk/tuck-filemanager/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/anuzdhk/tuck-filemanager/ci.yml?branch=feat%2Fstrata&style=for-the-badge&label=CI)](https://github.com/anuzdhk/tuck-filemanager/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-GPL--3.0--or--later-blue?style=for-the-badge)](LICENSE)
 [![Support on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Tuck-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/anujdhakal)
 
@@ -30,20 +30,20 @@ Dolphin's power with a calm, simple design: Quick Look, instant search, one-clic
 **One command** (Debian, Ubuntu, Fedora, openSUSE, Arch, and everything else via AppImage):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/anuzdhk/kivo-filemanager/feat/strata/get.sh | sh
+curl -fsSL https://raw.githubusercontent.com/anuzdhk/tuck-filemanager/feat/strata/get.sh | sh
 ```
 
 It picks the right package for your system, checks it against the release's SHA-256 checksums, and installs it. It asks for your password through `sudo`, except for the AppImage, which installs just for you. Want to see what it would do first?
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/anuzdhk/kivo-filemanager/feat/strata/get.sh | sh -s -- --dry-run
+curl -fsSL https://raw.githubusercontent.com/anuzdhk/tuck-filemanager/feat/strata/get.sh | sh -s -- --dry-run
 ```
 
 Use `sh -s -- --appimage` to get the AppImage on any system.
 
 ### Or download a package
 
-Grab the file for your system from the [latest release](https://github.com/anuzdhk/kivo-filemanager/releases/latest):
+Grab the file for your system from the [latest release](https://github.com/anuzdhk/tuck-filemanager/releases/latest):
 
 | Your system | File | Install it with |
 |---|---|---|
@@ -76,7 +76,7 @@ Grab the file for your system from the [latest release](https://github.com/anuzd
 - Filters for kind, date and size, or type them: `kind:pdf`, `modified:week`, `size:>10mb`, `tag:work`
 
 **Preview without opening**
-- Press **Space** for Quick Look: images, video, audio, PDFs, code with syntax colours, Markdown, and archive contents
+- Press **Space** for Quick Look: images, video, audio, PDFs, code with syntax colours, Markdown, archive contents and 3D models
 - Arrow keys move to the next file while the preview stays open
 
 **Archives and apps, one click away**
@@ -91,6 +91,11 @@ Grab the file for your system from the [latest release](https://github.com/anuzd
 - Bookmarks, network shares (SFTP, SMB, FTP, WebDAV), mounting and ejecting drives
 - **Cleaner**: free space by clearing caches that are safe to delete (previews, browser and package caches); it never touches your files, and skips a browser's cache while it's open
 - See how full each drive is right in the sidebar, with details in Preferences › Storage
+
+**Addons** (each can be turned off in Preferences › Addons)
+- **Image Converter:** right-click images, or a whole folder, › Convert Images to WebP, AVIF, JPEG or PNG with a quality slider and optional resize. Uses ImageMagick.
+- **Video Compressor:** right-click › Compress Video with simple presets (High quality, Balanced, Smallest file) and an optional resolution limit. Uses FFmpeg.
+- **3D Model Viewer:** thumbnails and Quick Look for GLB, glTF, OBJ, STL and binary FBX models. Drag to turn the model. Built in, nothing to install.
 
 **Make it yours**
 - 11 themes (including AMOLED Black) plus your own, any accent colour, text that always stays readable
@@ -194,7 +199,7 @@ sudo pacman -S base-devel gtk4 libadwaita gtksourceview5 poppler-glib libarchive
 Then build, run, and install:
 
 ```bash
-git clone https://github.com/anuzdhk/kivo-filemanager.git && cd kivo-filemanager
+git clone https://github.com/anuzdhk/tuck-filemanager.git && cd tuck-filemanager
 cargo build --release
 ./target/release/tuck            # run it from here, or install it:
 ./install.sh --user              # just for you, no sudo (sudo ./install.sh for everyone)

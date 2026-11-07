@@ -19,6 +19,7 @@ pub fn show_page(parent: Option<&gtk::Window>, page_name: Option<&str>) {
 
     dialog.add(&keyboard_page());
     dialog.add(&crate::storage_ui::page());
+    dialog.add(&crate::addons_ui::page());
     dialog.add(&crate::update_ui::page());
     if let Some(n) = page_name {
         dialog.set_visible_page_name(n);

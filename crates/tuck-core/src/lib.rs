@@ -4,6 +4,7 @@
 //! Nothing in this crate depends on GTK. The application crate feeds it plain
 //! data and gets plain data back, which keeps all of this unit-testable.
 
+pub mod addons;
 pub mod archive;
 pub mod bookmarks;
 pub mod cleaner;
@@ -15,7 +16,9 @@ pub mod icons;
 pub mod install;
 pub mod group;
 pub mod listing;
+pub mod media;
 pub mod meta;
+pub mod model3d;
 pub mod names;
 pub mod ops;
 pub mod paths;

@@ -244,22 +244,49 @@ impl Window {
             }
         };
         sync();
+        // Follows the header's width: tells us when the window or the
+        // sidebars change size.
+        let probe = gtk::DrawingArea::builder().can_target(false).can_focus(false).build();
         {
-            let (fits, sync) = (fits.clone(), sync.clone());
-            breadcrumb.width_adjustment().connect_changed(move |adj| {
-                // Collapse when the path is clipped; expand when it would fit
-                // beside the field again (its width plus a little slack).
-                let room = 220.0 + 24.0; // the field's min-width in style.css, plus spacing
-                let now = if fits.get() { adj.upper() <= adj.page_size() + 1.0 } else { adj.upper() + room <= adj.page_size() };
+            let (fits, sync, bc, mid, sb, pill) = (fits.clone(), sync.clone(), breadcrumb.clone(), middle.clone(), search_button.clone(), pill.clone());
+            let check = move || {
+                // The header lays out [start buttons + middle] … [end buttons];
+                // what's between them is unused, and the middle could have it.
+                let Some(row) = mid.parent().and_then(|start| start.parent()) else { return };
+                let mut used = 0;
+                let mut c = row.first_child();
+                while let Some(w) = c {
+                    if w.is_visible() {
+                        used += w.width();
+                    }
+                    c = w.next_sibling();
+                }
+                let free = mid.width() + (row.width() - used).max(0);
+                if free <= 0 {
+                    return;
+                }
+                // Room for the path beside the field (and the spacing).
+                let mut room = free - pill.measure(gtk::Orientation::Horizontal, -1).0 - 8;
+                if !fits.get() {
+                    // The search button and its spacing come back too, less a
+                    // little slack so it doesn't flicker.
+                    room += sb.width() + 6 - 4;
+                }
+                let now = bc.path_width() <= f64::from(room);
                 if now != fits.get() {
                     fits.set(now);
                     sync();
                 }
-            });
+            };
+            let c = check.clone();
+            breadcrumb.width_adjustment().connect_changed(move |_| c());
+            probe.connect_resize(move |_, _, _| check());
         }
         search_button.connect_active_notify(move |_| sync());
         let content_tv = adw::ToolbarView::new();
-        content_tv.add_top_bar(&header);
+        let header_box = gtk::Overlay::builder().child(&header).build();
+        header_box.add_overlay(&probe);
+        content_tv.add_top_bar(&header_box);
         content_tv.add_top_bar(&search.revealer);
         content_tv.add_top_bar(&tab_bar);
         content_tv.set_content(Some(&info_split));
@@ -408,6 +435,7 @@ impl Window {
         win.setup_sidebar_resize(&resize_handle);
         win.setup_actions();
         win.setup_file_actions();
+        crate::addons_ui::setup_actions(&win);
         win.wire();
         if std::env::var_os("TUCK_DEBUG_KEYS").is_some() {
             // Diagnostics: which widget has focus when a key arrives.
@@ -680,6 +708,7 @@ impl Window {
     fn close_search(&self) {
         self.0.search_cancel.borrow().cancel();
         self.0.search.close();
+        self.0.search.set_results("");
     }
 
     /// Run the search bar's query in the active pane.
@@ -695,6 +724,7 @@ impl Window {
         if q.is_empty() {
             pane.end_search();
             self.0.search.set_status("");
+            self.0.search.set_results("");
             return;
         }
         let contents = self.0.search.contents();
@@ -759,12 +789,15 @@ impl Window {
                     pane_weak.append_results(items, &status);
                 }
                 let bar_status = match (done.is_some(), use_index, state) {
-                    (_, true, _) => format!("Index: {entries} items"),
-                    (false, false, _) => "Searching…".into(),
-                    (true, false, State::Ready) => "Searched this folder directly (not in the index)".into(),
-                    (true, false, _) => "Index is being built; searched directly".into(),
+                    (_, true, _) => format!("· Index: {entries} items"),
+                    (false, false, _) => String::new(),
+                    (true, false, State::Ready) => "· searched directly (not in the index)".into(),
+                    (true, false, _) => "· index is being built".into(),
                 };
                 w.0.search.set_status(&bar_status);
+                if let Some(s) = pane_weak.search_summary() {
+                    w.0.search.set_results(&s);
+                }
             }
         });
     }
@@ -946,6 +979,9 @@ impl Window {
             }
             PaneEvent::Selection | PaneEvent::Counts => {
                 if self.is_active(pane) {
+                    if let Some(s) = pane.search_summary() {
+                        self.0.search.set_results(&s);
+                    }
                     self.sync_info();
                     self.sync_selection_bar();
                     // Quick Look follows the selection while it's open.
@@ -985,6 +1021,7 @@ impl Window {
         self.0.back.set_sensitive(pane.can_go_back());
         self.0.forward.set_sensitive(pane.can_go_forward());
         self.0.up.set_sensitive(pane.can_go_up());
+        self.0.search.set_results(&pane.search_summary().unwrap_or_default());
         if let Some(dir) = loc.path() {
             self.0.terminal.follow(&dir);
         }

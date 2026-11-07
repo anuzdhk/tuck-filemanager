@@ -59,6 +59,18 @@ impl Window {
         };
         add("open", |w| w.op_open(false));
         add("open-with", |w| w.op_open(true));
+        let a = gio::SimpleAction::new("open-with-app", Some(glib::VariantTy::STRING));
+        let weak = self.downgrade();
+        a.connect_activate(move |_, id| {
+            let (Some(w), Some(id)) = (Window::from_weak(&weak), id.and_then(|v| v.str().map(String::from))) else { return };
+            let Some(app) = gio::AppInfo::all().into_iter().find(|a| a.id().as_deref() == Some(id.as_str())) else { return };
+            let files: Vec<gio::File> = w.selection().iter().filter(|i| !i.is_dir()).map(|i| i.target()).collect();
+            let ctx = WidgetExt::display(&w.gtk_window()).app_launch_context();
+            if let Err(e) = app.launch(&files, Some(&ctx)) {
+                w.toast(&format!("Couldn't start {}: {}", app.display_name(), e.message()));
+            }
+        });
+        self.gtk_window().add_action(&a);
         add("open-new-tab", |w| {
             for i in w.selection() {
                 if i.is_dir() {
@@ -163,16 +175,16 @@ impl Window {
         });
     }
 
-    fn selection(&self) -> Vec<FileItem> {
+    pub(crate) fn selection(&self) -> Vec<FileItem> {
         self.active_pane().map(|p| p.selected_items()).unwrap_or_default()
     }
 
-    fn parent_widget(&self) -> gtk::Widget {
+    pub(crate) fn parent_widget(&self) -> gtk::Widget {
         self.gtk_window().upcast()
     }
 
     /// Local paths of the selection, or a toast explaining why not.
-    fn selected_paths(&self) -> Option<Vec<PathBuf>> {
+    pub(crate) fn selected_paths(&self) -> Option<Vec<PathBuf>> {
         let sel = self.selection();
         if sel.is_empty() {
             return None;
@@ -194,7 +206,7 @@ impl Window {
     }
 
     /// Select `paths` in the active pane if they live in its folder.
-    fn select_results(&self, paths: &[PathBuf]) {
+    pub(crate) fn select_results(&self, paths: &[PathBuf]) {
         if let Some(pane) = self.active_pane()
             && let Some(dir) = pane.path() {
                 let mine: Vec<PathBuf> = paths.iter().filter(|p| p.parent() == Some(dir.as_path())).cloned().collect();

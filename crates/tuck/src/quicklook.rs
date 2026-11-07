@@ -307,8 +307,33 @@ impl QuickLook {
             Kind::Markdown => self.markdown(path),
             Kind::Archive => self.archive(path),
             Kind::Folder => self.folder(path, item),
-            Kind::Package | Kind::Unsupported => self.0.content.set_child(Some(&placeholder(item, true))),
+            Kind::Model if crate::addons_ui::enabled(tuck_core::addons::MODEL_VIEWER) => self.model(path),
+            // With the viewer off, text formats (OBJ, glTF) still show as text.
+            Kind::Model if preview::looks_like_text(&path) => self.text(path, item),
+            Kind::Model | Kind::Package | Kind::Unsupported => self.0.content.set_child(Some(&placeholder(item, true))),
         }
+    }
+
+    // ------------------------------------------------------------ 3D
+
+    fn model(&self, path: PathBuf) {
+        use tuck_core::model3d;
+        background(
+            self,
+            move || model3d::load(&path).map(model3d::Prepared::new),
+            |ql, res| match res {
+                Ok(p) => ql.0.content.set_child(Some(&model_view(p))),
+                Err(e) => {
+                    if let Some(i) = ql.current() {
+                        let page = placeholder(&i, true);
+                        if let Some(b) = page.downcast_ref::<gtk::Box>() {
+                            b.append(&note(&e));
+                        }
+                        ql.0.content.set_child(Some(&page));
+                    }
+                }
+            },
+        );
     }
 
     // ------------------------------------------------------------ images
@@ -624,6 +649,95 @@ fn animate(ql: &QuickLook, pic: gtk::Picture, frames: Rc<Vec<(gdk::Texture, u32)
         animate(&ql, pic, frames, next);
     });
     *ql.0.anim.borrow_mut() = Some(id);
+}
+
+/// A model you can turn by dragging (double-click resets the view). Each
+/// frame is drawn on a worker thread; while dragging, smaller and without
+/// smoothing so it keeps up, then once more in full when you let go.
+fn model_view(model: tuck_core::model3d::Prepared) -> gtk::Widget {
+    use std::cell::Cell;
+    use std::sync::Arc;
+    use tuck_core::model3d::View;
+    struct State {
+        view: Cell<View>,
+        start: Cell<View>,
+        busy: Cell<bool>,
+        again: Cell<Option<bool>>,
+    }
+    let tris = model.triangles();
+    let model = Arc::new(model);
+    let pic = gtk::Picture::builder().can_shrink(true).content_fit(gtk::ContentFit::Contain).hexpand(true).vexpand(true).css_classes(["ql-model"]).build();
+    pic.set_cursor_from_name(Some("grab"));
+    pic.update_property(&[gtk::accessible::Property::Label("3D model preview. Drag to turn it.")]);
+    let st = Rc::new(State { view: Cell::new(View::default()), start: Cell::new(View::default()), busy: Cell::new(false), again: Cell::new(None) });
+    // `fine`: full size with smooth edges (when still), else a quick frame.
+    fn draw(pic: &gtk::Picture, model: &Arc<tuck_core::model3d::Prepared>, st: &Rc<State>, fine: bool) {
+        if st.busy.get() {
+            // Remember the newest request; a fine one wins.
+            st.again.set(Some(fine || st.again.get().unwrap_or(false)));
+            return;
+        }
+        st.busy.set(true);
+        let (m, view) = (model.clone(), st.view.get());
+        let px = (if fine { 720 } else { 420 }) * pic.scale_factor().max(1) as u32;
+        let (tx, rx) = async_channel::bounded(1);
+        std::thread::spawn(move || {
+            let _ = tx.send_blocking(m.render(view, px, px, if fine { 2 } else { 1 }));
+        });
+        let (pic, model, st) = (pic.downgrade(), model.clone(), st.clone());
+        glib::MainContext::default().spawn_local(async move {
+            let Ok(rgba) = rx.recv().await else { return };
+            st.busy.set(false);
+            let Some(pic) = pic.upgrade() else { return };
+            let tex = gdk::MemoryTexture::new(px as i32, px as i32, gdk::MemoryFormat::R8g8b8a8, &glib::Bytes::from_owned(rgba), px as usize * 4);
+            pic.set_paintable(Some(&tex));
+            if let Some(fine) = st.again.take() {
+                draw(&pic, &model, &st, fine);
+            }
+        });
+    }
+    draw(&pic, &model, &st, true);
+    let drag = gtk::GestureDrag::new();
+    {
+        let st = st.clone();
+        let p = pic.clone();
+        drag.connect_drag_begin(move |_, _, _| {
+            st.start.set(st.view.get());
+            p.set_cursor_from_name(Some("grabbing"));
+        });
+    }
+    {
+        let (st, p, m) = (st.clone(), pic.clone(), model.clone());
+        drag.connect_drag_update(move |_, dx, dy| {
+            let s = st.start.get();
+            st.view.set(View { yaw: s.yaw + dx as f32 * 0.01, pitch: (s.pitch + dy as f32 * 0.01).clamp(-1.55, 1.55) });
+            draw(&p, &m, &st, false);
+        });
+    }
+    {
+        let (st, p, m) = (st.clone(), pic.clone(), model.clone());
+        drag.connect_drag_end(move |_, _, _| {
+            p.set_cursor_from_name(Some("grab"));
+            draw(&p, &m, &st, true);
+        });
+    }
+    pic.add_controller(drag);
+    let click = gtk::GestureClick::new();
+    {
+        let (st, p, m) = (st.clone(), pic.clone(), model.clone());
+        click.connect_pressed(move |_, n, _, _| {
+            if n == 2 {
+                st.view.set(View::default());
+                draw(&p, &m, &st, true);
+            }
+        });
+    }
+    pic.add_controller(click);
+    let b = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(6).margin_top(12).margin_bottom(12).margin_start(12).margin_end(12).build();
+    b.append(&pic);
+    let tris = if tris == 1 { "1 triangle".to_string() } else { format!("{} triangles", tris) };
+    b.append(&note(&format!("Drag to turn · double-click to reset · {tris}")));
+    b.upcast()
 }
 
 fn picture(t: &gdk::Texture) -> gtk::Widget {

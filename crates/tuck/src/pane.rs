@@ -60,6 +60,7 @@ pub struct Inner {
     flat_sel: gtk::MultiSelection,
     tree_sel: gtk::MultiSelection,
     filter_bar: gtk::Revealer,
+    heading: gtk::Box,
     filter_entry: gtk::SearchEntry,
     settings: Rc<Cell<ViewSettings>>,
     filter_text: Rc<RefCell<String>>,
@@ -301,6 +302,7 @@ impl Pane {
             flat_sel,
             tree_sel,
             filter_bar,
+            heading,
             filter_entry,
             settings,
             filter_text,
@@ -725,6 +727,8 @@ impl Pane {
         if self.0.searching.replace(on) == on {
             return;
         }
+        // Results need no title row: their count shows in the search bar.
+        self.0.heading.set_visible(!on);
         // The "Where" column only makes sense for results from many folders.
         let cols = self.0.details.columns();
         for i in 0..cols.n_items() {
@@ -746,6 +750,11 @@ impl Pane {
         }
     }
 
+    /// "N results · 3 selected" while showing search results.
+    pub fn search_summary(&self) -> Option<String> {
+        self.0.searching.get().then(|| self.0.subtitle.label().to_string())
+    }
+
     /// Replace the view's contents with search results.
     pub fn show_results(&self, items: Vec<FileItem>, status: &str) {
         if let Some(task) = self.0.load_task.borrow_mut().take() {
@@ -755,7 +764,6 @@ impl Pane {
         self.0.loading.set(false);
         self.set_searching(true);
         *self.0.search_status.borrow_mut() = status.to_string();
-        self.0.title.set_label("Search Results");
         let store = gio::ListStore::new::<FileItem>();
         store.extend_from_slice(&items);
         self.replace_store(store);
@@ -1116,7 +1124,7 @@ impl Pane {
             self.0.compact.clone().upcast(),
             self.0.details.clone().upcast(),
         ] {
-            self.setup_drop_target(&view);
+            self.setup_drop_target(&view, None);
         }
 
         // Pane becomes active on focus or click.
@@ -1258,6 +1266,14 @@ impl Pane {
                 }
             }),
             bind_cell: bind_item,
+            setup_list: Box::new({
+                let w = w.clone();
+                move |view, dir| {
+                    if let Some(p) = Pane::from_weak(&w) {
+                        p.setup_drop_target(view, dir);
+                    }
+                }
+            }),
         };
         let cols = crate::columns_ui::Columns::new(self.0.flat_sel.clone(), hooks);
         self.0.stack.add_named(&cols.widget(), Some("columns"));
@@ -1404,6 +1420,13 @@ impl Pane {
                     has_file: sel.iter().any(|i| !i.is_dir()),
                     in_trash: self.in_trash(),
                     services: if self.in_trash() { Vec::new() } else { crate::services_ui::applicable(&sel) },
+                    // The first file's apps; the chosen one opens every file.
+                    apps: sel.iter().find(|i| !i.is_dir()).map(|i| crate::menus::apps_for(&i.content_type())).unwrap_or_default(),
+                    addon_items: if self.in_trash() {
+                        Vec::new()
+                    } else {
+                        crate::addons_ui::menu_items(&sel.iter().filter_map(|i| i.path()).collect::<Vec<_>>(), sel.iter().any(|i| i.is_dir()))
+                    },
                 })
             }
             None => {
@@ -1414,7 +1437,8 @@ impl Pane {
         if let Some(old) = self.0.menu.borrow_mut().take() {
             old.unparent();
         }
-        let pop = gtk::PopoverMenu::from_model(Some(&menu));
+        // Submenus open beside the menu instead of sliding over it.
+        let pop = gtk::PopoverMenu::from_model_full(&menu, gtk::PopoverMenuFlags::NESTED);
         pop.set_parent(&self.0.root);
         pop.set_has_arrow(false);
         pop.set_halign(gtk::Align::Start);
@@ -1467,10 +1491,19 @@ impl Pane {
             if pane.in_trash() {
                 return None;
             }
-            if !pane.is_selected(&item) {
-                pane.select_only(&item);
-            }
-            let files: Vec<gio::File> = pane.selected_items().iter().map(|i| i.target()).collect();
+            let files: Vec<gio::File> = if pane.settings().mode == ViewMode::Columns
+                && let Some(c) = pane.cols()
+            {
+                c.activate_column_of(&item);
+                // Selecting would replace the columns to the right, the
+                // likely drop target: drag an unselected item on its own.
+                if pane.is_selected(&item) { pane.selected_items().iter().map(|i| i.target()).collect() } else { vec![item.target()] }
+            } else {
+                if !pane.is_selected(&item) {
+                    pane.select_only(&item);
+                }
+                pane.selected_items().iter().map(|i| i.target()).collect()
+            };
             let theme = gtk::IconTheme::for_display(&cell.display());
             let icon = theme.lookup_by_gicon(&item.icon(), 48, 1, gtk::TextDirection::None, gtk::IconLookupFlags::empty());
             src.set_icon(Some(&icon), 24, 24);
@@ -1480,7 +1513,10 @@ impl Pane {
         cell.add_controller(src);
     }
 
-    fn setup_drop_target(&self, view: &gtk::Widget) {
+    /// Drops on a folder go into it; elsewhere into `dir` (None = this
+    /// pane's folder; a deeper column passes its own).
+    fn setup_drop_target(&self, view: &gtk::Widget, dir: Option<gio::File>) {
+        let fallback = Rc::new(dir);
         let target = gtk::DropTarget::new(
             gdk::FileList::static_type(),
             gdk::DragAction::COPY | gdk::DragAction::MOVE | gdk::DragAction::LINK,
@@ -1488,17 +1524,19 @@ impl Pane {
         target.set_preload(true);
         let weak = self.downgrade();
         let v = view.downgrade();
+        let fb = fallback.clone();
         target.connect_motion(move |t, x, y| {
             let (Some(pane), Some(view)) = (Pane::from_weak(&weak), v.upgrade()) else {
                 return gdk::DragAction::empty();
             };
             let (dir, cell) = match item_at(&view, x, y) {
                 Some((item, cell)) if item.is_dir() => (item.target(), Some(cell)),
-                _ => (pane.location(), None),
+                _ => ((*fb).clone().unwrap_or_else(|| pane.location()), None),
             };
             pane.set_drop_hover(cell);
             let files = t.value().and_then(|v| v.get::<gdk::FileList>().ok()).map(|l| l.files()).unwrap_or_default();
-            if files.iter().any(|f| f.equal(&dir)) || pane.in_trash() {
+            // Not onto itself, nor into a folder inside it.
+            if files.iter().any(|f| f.equal(&dir) || dir.has_prefix(f)) || pane.in_trash() {
                 pane.0.drop_action.set(gdk::DragAction::empty());
                 return gdk::DragAction::empty();
             }
@@ -1535,7 +1573,7 @@ impl Pane {
             let Ok(list) = value.get::<gdk::FileList>() else { return false };
             let dir = match item_at(&view, x, y) {
                 Some((item, _)) if item.is_dir() => item.target(),
-                _ => pane.location(),
+                _ => (*fallback).clone().unwrap_or_else(|| pane.location()),
             };
             let action = pane.0.drop_action.get();
             let files = list.files();

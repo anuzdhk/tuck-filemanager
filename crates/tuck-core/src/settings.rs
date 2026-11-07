@@ -218,6 +218,8 @@ pub struct AppSettings {
     pub sidebar_width: f64,
     /// Sidebar sections folded away (by id: "favourites", "drives", …).
     pub sidebar_collapsed: Vec<String>,
+    /// Addon switches by id (see `addons`); missing = the addon's default.
+    pub addons: std::collections::BTreeMap<String, bool>,
 }
 
 impl Default for AppSettings {
@@ -234,6 +236,7 @@ impl Default for AppSettings {
             last_update_check: 0,
             sidebar_width: 240.0,
             sidebar_collapsed: Vec::new(),
+            addons: Default::default(),
         }
     }
 }
