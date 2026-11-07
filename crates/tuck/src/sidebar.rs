@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Places sidebar: user folders, locations, devices (mount / unmount), and a
-//! space used on each drive.
+//! Places sidebar, in foldable sections: Favourites, Bookmarks, Drives
+//! (with how full each is), Network and Tags.
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -19,6 +19,8 @@ enum Target {
     Tag(String),
     /// "Connect to Server…".
     Connect,
+    /// A section heading: activating it folds or unfolds the section.
+    Section(String),
 }
 
 type OnOpen = Rc<dyn Fn(gio::File)>;
@@ -35,6 +37,7 @@ pub struct Inner {
     stack: gtk::Stack,
     folders: crate::folders_ui::FoldersPanel,
     folders_button: gtk::ToggleButton,
+    places_button: gtk::ToggleButton,
     on_open: RefCell<Option<OnOpen>>,
     on_message: RefCell<Option<OnMessage>>,
     on_tag: RefCell<Option<OnTag>>,
@@ -45,6 +48,9 @@ pub struct Inner {
     bookmarks_monitor: RefCell<Option<gio::FileMonitor>>,
     tags: RefCell<Vec<String>>,
     current: RefCell<Option<gio::File>>,
+    /// Which section each row belongs to, for folding.
+    sections: RefCell<Vec<(String, gtk::ListBoxRow)>>,
+    building: RefCell<String>,
 }
 
 #[derive(Clone)]
@@ -69,36 +75,23 @@ impl Sidebar {
             .build();
         // Places, or the Folders tree (F7).
         let folders = crate::folders_ui::FoldersPanel::new();
-        let stack = gtk::Stack::builder().vexpand(true).transition_type(gtk::StackTransitionType::Crossfade).build();
+        let stack = gtk::Stack::builder().vexpand(true).transition_type(gtk::StackTransitionType::Crossfade).transition_duration(150).build();
         stack.add_named(&scroller, Some("places"));
         stack.add_named(&folders.widget(), Some("folders"));
-        let places_button = gtk::ToggleButton::builder().label("Places").active(true).hexpand(true).build();
-        let folders_button = gtk::ToggleButton::builder().label("Folders").group(&places_button).hexpand(true).tooltip_text("Folders (F7)").build();
-        let switcher = gtk::Box::builder().css_classes(["linked", "sidebar-switcher"]).margin_start(12).margin_end(12).margin_bottom(6).build();
+        root.append(&stack);
+        // Bottom bar: [Places | Folders]  ⚙  🧹
+        let places_button = gtk::ToggleButton::builder().label("Places").active(true).build();
+        let folders_button = gtk::ToggleButton::builder().label("Folders").group(&places_button).tooltip_text("Folders (F7)").build();
+        let switcher = gtk::Box::builder().css_classes(["linked", "sidebar-switcher"]).hexpand(true).halign(gtk::Align::Start).valign(gtk::Align::Center).build();
         switcher.append(&places_button);
         switcher.append(&folders_button);
-        root.append(&switcher);
-        root.append(&stack);
-        // Bottom bar: Preferences, Search, Cleaner.
-        // Bottom bar: | ⚙ Preferences | ✨ |
-        let tools = gtk::Box::builder().spacing(6).css_classes(["sidebar-tools"]).build();
-        let prefs = gtk::Button::builder()
-            .child(&adw::ButtonContent::builder().icon_name("tuck-preferences-symbolic").label("Preferences").build())
-            .tooltip_text("Preferences (Ctrl+,)")
-            .action_name("app.preferences")
-            .hexpand(true)
-            .css_classes(["flat", "sidebar-tool"])
-            .build();
-        let cleaner = gtk::Button::builder()
-            .icon_name("tuck-cleaner-symbolic")
-            .tooltip_text("Cleaner")
-            .action_name("win.cleaner")
-            .css_classes(["flat", "sidebar-tool"])
-            .build();
-        cleaner.update_property(&[gtk::accessible::Property::Label("Cleaner")]);
-        tools.append(&prefs);
-        tools.append(&gtk::Separator::builder().orientation(gtk::Orientation::Vertical).margin_top(6).margin_bottom(6).build());
-        tools.append(&cleaner);
+        let tools = gtk::Box::builder().spacing(4).css_classes(["sidebar-tools"]).build();
+        tools.append(&switcher);
+        for (icon, tip, action) in [("tuck-settings-symbolic", "Preferences (Ctrl+,)", "app.preferences"), ("tuck-cleaner-symbolic", "Cleaner", "win.cleaner")] {
+            let b = gtk::Button::builder().icon_name(icon).tooltip_text(tip).action_name(action).valign(gtk::Align::Center).css_classes(["flat", "sidebar-tool"]).build();
+            b.update_property(&[gtk::accessible::Property::Label(tip.split(" (").next().unwrap_or(tip))]);
+            tools.append(&b);
+        }
         root.append(&tools);
 
         let sb = Sidebar(Rc::new(Inner {
@@ -109,6 +102,7 @@ impl Sidebar {
             stack,
             folders,
             folders_button: folders_button.clone(),
+            places_button: places_button.clone(),
             on_open: RefCell::new(None),
             on_message: RefCell::new(None),
             on_tag: RefCell::new(None),
@@ -117,6 +111,8 @@ impl Sidebar {
             bookmark_rows: RefCell::new(Vec::new()),
             bookmarks_monitor: RefCell::new(None),
             tags: RefCell::new(crate::search_ui::all_tags()),
+            sections: RefCell::default(),
+            building: RefCell::default(),
             current: RefCell::new(None),
         }));
         let weak = Rc::downgrade(&sb.0);
@@ -260,6 +256,7 @@ impl Sidebar {
             match target {
                 Some(Target::File(f)) => sb.open(f),
                 Some(Target::Volume(v)) => sb.mount(v),
+                Some(Target::Section(id)) => sb.toggle_section(&id),
                 Some(Target::Connect) => {
                     let cb = sb.0.on_connect.borrow().clone();
                     if let Some(cb) = cb {
@@ -364,10 +361,11 @@ impl Sidebar {
         while let Some(c) = list.first_child() {
             list.remove(&c);
         }
+        self.0.sections.borrow_mut().clear();
         let mut rows = Vec::new();
 
         let dirs = UserDirs::load();
-        self.heading(&mut rows, "Places");
+        self.heading(&mut rows, "favourites", "Favourites");
         for d in UserDir::SIDEBAR {
             if let Some(p) = dirs.get(d) {
                 let file = gio::File::for_path(p);
@@ -378,8 +376,8 @@ impl Sidebar {
         self.place(&mut rows, "Trash", "tuck-trash-symbolic", Target::File(gio::File::for_uri("trash:///")), None);
 
         // The user's own places (GTK bookmarks, shared with other apps).
-        // Skip bookmarks already shown under Places (GNOME adds Documents,
-        // Music… to the shared bookmarks file on every new account).
+        // Skip bookmarks already shown under Favourites (GNOME adds
+        // Documents, Music… to the shared bookmarks file on new accounts).
         let in_places: Vec<gio::File> = UserDir::SIDEBAR.iter().filter_map(|d| dirs.get(*d)).map(gio::File::for_path).collect();
         let marks: Vec<_> = tuck_core::bookmarks::load()
             .into_iter()
@@ -390,7 +388,7 @@ impl Sidebar {
             .collect();
         let mut bookmark_rows = Vec::new();
         if !marks.is_empty() {
-            self.heading(&mut rows, "Bookmarks");
+            self.heading(&mut rows, "bookmarks", "Bookmarks");
             for b in marks {
                 let file = gio::File::for_uri(&b.uri);
                 let label = b.label.clone().unwrap_or_else(|| crate::pane::folder_title(&file));
@@ -403,68 +401,120 @@ impl Sidebar {
         }
         *self.0.bookmark_rows.borrow_mut() = bookmark_rows;
 
-        self.heading(&mut rows, "Locations");
-        self.place_drive(&mut rows, "Computer", "tuck-drive-symbolic", Target::File(gio::File::for_path("/")), None, Some(gio::File::for_path("/")));
-        self.place(&mut rows, "Network", "tuck-server-symbolic", Target::File(gio::File::for_uri("network:///")), None);
-        self.place(&mut rows, "Connect to Server…", "tuck-link-symbolic", Target::Connect, None);
-
-        // Devices: mounted volumes, then unmounted ones that can be mounted.
-        let mut devices: Vec<(String, String, Target, Option<gio::Mount>)> = Vec::new();
+        // Drives: the system disk, the user's other partitions (a separate
+        // /home, a data disk: GIO hides those), then GIO's local mounts and
+        // drives that aren't mounted yet. Network shares go under Network.
+        self.heading(&mut rows, "drives", "Drives");
+        let root = gio::File::for_path("/");
+        self.place_drive(&mut rows, "Computer", "tuck-drive-symbolic", Target::File(root.clone()), None, Some(root), None);
+        let home = tuck_core::paths::home();
+        let mut shown: Vec<std::path::PathBuf> = vec!["/".into()];
+        for p in tuck_core::drives::list() {
+            let name = if home.starts_with(&p.mount) {
+                "Home Disk".to_string()
+            } else {
+                p.mount.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| p.mount.display().to_string())
+            };
+            let f = gio::File::for_path(&p.mount);
+            self.place_drive(&mut rows, &name, "tuck-drive-symbolic", Target::File(f.clone()), None, Some(f), None);
+            shown.push(p.mount);
+        }
+        let mut network: Vec<(String, String, gio::File, gio::Mount)> = Vec::new();
         for m in self.0.monitor.mounts() {
             if m.is_shadowed() {
                 continue;
             }
             let root = m.root();
-            if root.path().is_some_and(|p| p.as_os_str() == "/") {
-                continue;
+            let name = m.name().to_string();
+            let local = root.path().filter(|p| !p.to_string_lossy().contains("/gvfs/"));
+            match local {
+                Some(p) if shown.contains(&p) => continue,
+                Some(p) => {
+                    let icon = icon_name(&m.symbolic_icon()).unwrap_or_else(|| "tuck-removable-symbolic".into());
+                    self.place_drive(&mut rows, &name, &icon, Target::File(root.clone()), Some(m), Some(root), None);
+                    shown.push(p);
+                }
+                None => {
+                    let icon = icon_name(&m.symbolic_icon()).unwrap_or_else(|| "tuck-server-symbolic".into());
+                    network.push((name, icon, root, m));
+                }
             }
-            let icon = icon_name(&m.symbolic_icon()).unwrap_or_else(|| "tuck-removable-symbolic".into());
-            devices.push((m.name().to_string(), icon, Target::File(root), Some(m)));
         }
         for v in self.0.monitor.volumes() {
             if v.get_mount().is_some() || !v.can_mount() {
                 continue;
             }
             let icon = icon_name(&v.symbolic_icon()).unwrap_or_else(|| "tuck-drive-symbolic".into());
-            devices.push((v.name().to_string(), icon, Target::Volume(v), None));
+            self.place_drive(&mut rows, &v.name(), &icon, Target::Volume(v.clone()), None, None, Some("Not mounted"));
         }
-        if !devices.is_empty() {
-            self.heading(&mut rows, "Devices");
-            for (name, icon, target, mount) in devices {
-                let usage = match &target {
-                    Target::File(f) => Some(f.clone()),
-                    _ => None,
-                };
-                self.place_drive(&mut rows, &name, &icon, target, mount, usage);
-            }
+
+        self.heading(&mut rows, "network", "Network");
+        self.place(&mut rows, "Network", "tuck-server-symbolic", Target::File(gio::File::for_uri("network:///")), None);
+        for (name, icon, root, m) in network {
+            self.place(&mut rows, &name, &icon, Target::File(root), Some(m));
         }
+        self.place(&mut rows, "Connect to Server…", "tuck-link-symbolic", Target::Connect, None);
 
         let tags = self.0.tags.borrow().clone();
         if !tags.is_empty() {
-            self.heading(&mut rows, "Tags");
+            self.heading(&mut rows, "tags", "Tags");
             for t in tags {
                 self.place(&mut rows, &t, "tuck-tag-symbolic", Target::Tag(t.clone()), None);
             }
         }
 
         *self.0.rows.borrow_mut() = rows;
+        self.apply_folding();
         let cur = self.0.current.borrow().clone();
         if let Some(f) = cur {
             self.set_location(&f);
         }
     }
 
-    fn heading(&self, rows: &mut Vec<(gtk::ListBoxRow, Option<Target>)>, text: &str) {
-        let label = gtk::Label::builder().label(text).xalign(0.0).css_classes(["sidebar-heading"]).build();
+    /// Hide the rows of folded sections, and point each heading's chevron.
+    fn apply_folding(&self) {
+        let folded = crate::theme_ui::settings().sidebar_collapsed;
+        for (sec, row) in self.0.sections.borrow().iter() {
+            row.set_visible(!folded.contains(sec));
+        }
+        for (row, t) in self.0.rows.borrow().iter() {
+            if let Some(Target::Section(id)) = t {
+                let open = !folded.contains(id);
+                if open { row.remove_css_class("folded") } else { row.add_css_class("folded") }
+                row.update_state(&[gtk::accessible::State::Expanded(Some(open))]);
+            }
+        }
+    }
+
+    fn toggle_section(&self, id: &str) {
+        let id = id.to_string();
+        crate::theme_ui::update_quiet(move |s| {
+            if let Some(i) = s.sidebar_collapsed.iter().position(|x| *x == id) {
+                s.sidebar_collapsed.remove(i);
+            } else {
+                s.sidebar_collapsed.push(id);
+            }
+        });
+        self.apply_folding();
+    }
+
+    /// A section heading; click it (or Enter) to fold the section.
+    fn heading(&self, rows: &mut Vec<(gtk::ListBoxRow, Option<Target>)>, id: &str, text: &str) {
+        *self.0.building.borrow_mut() = id.to_string();
+        let b = gtk::Box::builder().spacing(4).build();
+        b.append(&gtk::Label::builder().label(text).xalign(0.0).hexpand(true).css_classes(["sidebar-heading"]).build());
+        b.append(&gtk::Image::builder().icon_name("tuck-chevron-symbolic").pixel_size(12).css_classes(["section-chevron"]).build());
         let row = gtk::ListBoxRow::builder()
-            .child(&label)
+            .child(&b)
             .selectable(false)
-            .activatable(false)
-            .focusable(false)
+            .activatable(true)
+            .css_classes(["section-heading-row"])
+            .tooltip_text(format!("Show or hide {text}"))
             .build();
-        row.set_accessible_role(gtk::AccessibleRole::Presentation);
+        row.set_accessible_role(gtk::AccessibleRole::Button);
+        row.update_property(&[gtk::accessible::Property::Label(text)]);
         self.0.list.append(&row);
-        rows.push((row, None));
+        rows.push((row, Some(Target::Section(id.to_string()))));
     }
 
     fn place(
@@ -475,10 +525,11 @@ impl Sidebar {
         target: Target,
         mount: Option<gio::Mount>,
     ) {
-        self.place_drive(rows, label, icon, target, mount, None);
+        self.place_drive(rows, label, icon, target, mount, None, None);
     }
 
     /// A row; with `usage`, a drive row that also shows how full it is.
+    #[allow(clippy::too_many_arguments)]
     fn place_drive(
         &self,
         rows: &mut Vec<(gtk::ListBoxRow, Option<Target>)>,
@@ -487,6 +538,7 @@ impl Sidebar {
         target: Target,
         mount: Option<gio::Mount>,
         usage: Option<gio::File>,
+        note: Option<&str>,
     ) {
         let b = gtk::Box::builder().spacing(10).build();
         b.append(&gtk::Image::from_icon_name(icon));
@@ -505,7 +557,16 @@ impl Sidebar {
                 b.append(&col);
                 fill_usage(file, bar, detail);
             }
-            None => b.append(&name),
+            None => match note {
+                // A small second line, e.g. "Not mounted".
+                Some(n) => {
+                    let col = gtk::Box::builder().orientation(gtk::Orientation::Vertical).spacing(2).hexpand(true).valign(gtk::Align::Center).css_classes(["drive-row"]).build();
+                    col.append(&name);
+                    col.append(&gtk::Label::builder().label(n).xalign(0.0).css_classes(["storage-detail"]).build());
+                    b.append(&col);
+                }
+                None => b.append(&name),
+            },
         }
         if let Some(m) = mount.filter(|m| m.can_unmount() || m.can_eject()) {
             let eject = gtk::Button::builder()
@@ -526,6 +587,8 @@ impl Sidebar {
         let row = gtk::ListBoxRow::builder().child(&b).tooltip_text(label).build();
         row.update_property(&[gtk::accessible::Property::Label(label)]);
         self.0.list.append(&row);
+        let section = self.0.building.borrow().clone();
+        self.0.sections.borrow_mut().push((section, row.clone()));
         rows.push((row, Some(target)));
     }
 
@@ -533,10 +596,7 @@ impl Sidebar {
     pub fn toggle_folders(&self) {
         let b = &self.0.folders_button;
         if b.is_active() {
-            let places = self.0.root.first_child().and_then(|sw| sw.first_child()).and_downcast::<gtk::ToggleButton>();
-            if let Some(p) = places {
-                p.set_active(true);
-            }
+            self.0.places_button.set_active(true);
         } else {
             b.set_active(true);
         }

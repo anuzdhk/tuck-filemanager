@@ -6,6 +6,8 @@
 //! package that fits this system (deb, rpm, Arch package or AppImage) into
 //! the Downloads folder, checks it against the release's SHA-256 checksums
 //! when they're published, and then hands it to the normal install flow.
+//! An AppImage replaces the installed one in place instead (see
+//! [`replace_appimage`]), so updating never leaves a second copy behind.
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -284,6 +286,68 @@ pub fn download(
     Ok((dest, expected.is_some()))
 }
 
+/// Where an AppImage update goes: over the AppImage that's running, else
+/// ~/Applications/Tuck.AppImage, where the curl installer puts it.
+pub fn appimage_target(running: Option<&Path>, home: &Path) -> PathBuf {
+    match running {
+        Some(p) => p.to_path_buf(),
+        None => home.join("Applications").join("Tuck.AppImage"),
+    }
+}
+
+/// A Tuck AppImage by its file name ("Tuck.AppImage", "Tuck-0.1.3-x86_64.AppImage").
+fn is_tuck_appimage(name: &str) -> bool {
+    let n = name.to_ascii_lowercase();
+    n.ends_with(".appimage") && (n == "tuck.appimage" || n.starts_with("tuck-") || n.starts_with("tuck_"))
+}
+
+/// Put the downloaded AppImage `new` in place of `target` with an atomic
+/// rename (the running copy keeps working until Tuck restarts), then remove
+/// the extra copies an older updater installed beside it: other Tuck
+/// AppImages in that folder and their `teku-*.desktop` menu entries in
+/// `menu`. Returns the paths removed.
+pub fn replace_appimage(new: &Path, target: &Path, menu: &Path) -> std::io::Result<Vec<PathBuf>> {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = target.parent().ok_or_else(|| std::io::Error::other("no folder for the AppImage"))?;
+    std::fs::create_dir_all(dir)?;
+    let tmp = dir.join(format!(".{}.new", target.file_name().unwrap_or_default().to_string_lossy()));
+    // Copy rather than rename: Downloads may be on another disk.
+    std::fs::copy(new, &tmp)?;
+    std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o755))?;
+    if let Err(e) = std::fs::rename(&tmp, target) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    if new != target {
+        let _ = std::fs::remove_file(new);
+    }
+
+    let mut removed = Vec::new();
+    for e in std::fs::read_dir(dir)?.flatten() {
+        let p = e.path();
+        if p != target && p.is_file() && is_tuck_appimage(&e.file_name().to_string_lossy()) && std::fs::remove_file(&p).is_ok() {
+            removed.push(p);
+        }
+    }
+    // Menu entries the app installer made for those copies.
+    for e in std::fs::read_dir(menu).into_iter().flatten().flatten() {
+        let p = e.path();
+        let name = e.file_name().to_string_lossy().to_string();
+        if !name.starts_with("teku-") || !name.ends_with(".desktop") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&p).unwrap_or_default();
+        let points_at_removed = text
+            .lines()
+            .filter_map(|l| l.strip_prefix("X-Teku-AppImage="))
+            .any(|v| removed.iter().any(|r| Path::new(v) == r));
+        if points_at_removed && std::fs::remove_file(&p).is_ok() {
+            removed.push(p);
+        }
+    }
+    Ok(removed)
+}
+
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
@@ -340,6 +404,39 @@ mod tests {
         assert_eq!(package_kind(OsFamily::Arch, false), PackageKind::AppImage);
         assert_eq!(package_kind(OsFamily::Unknown, false), PackageKind::AppImage);
         assert_eq!(package_kind(OsFamily::Debian, true), PackageKind::AppImage);
+    }
+
+    #[test]
+    fn appimage_update_replaces_and_cleans_up() {
+        let t = tempfile::tempdir().unwrap();
+        let apps = t.path().join("Applications");
+        let menu = t.path().join("menu");
+        let dl = t.path().join("Downloads");
+        for d in [&apps, &menu, &dl] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        let target = appimage_target(None, t.path());
+        assert_eq!(target, apps.join("Tuck.AppImage"));
+        std::fs::write(&target, "old").unwrap();
+        // A second copy from an older updater, with its menu entry.
+        let extra = apps.join("Tuck-0.1.2-x86_64.AppImage");
+        std::fs::write(&extra, "older").unwrap();
+        let entry = menu.join("teku-tuck-0.1.2-x86_64.desktop");
+        std::fs::write(&entry, format!("[Desktop Entry]\nX-Teku-AppImage={}\n", extra.display())).unwrap();
+        // Things that aren't Tuck's stay.
+        std::fs::write(apps.join("Tuckshop.AppImage"), "x").unwrap();
+        std::fs::write(menu.join("teku-other.desktop"), "X-Teku-AppImage=/x/Other.AppImage\n").unwrap();
+
+        let new = dl.join("Tuck-0.1.3-x86_64.AppImage");
+        std::fs::write(&new, "new").unwrap();
+        let removed = replace_appimage(&new, &target, &menu).unwrap();
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "new");
+        assert!(!new.exists() && !extra.exists() && !entry.exists());
+        assert_eq!(removed.len(), 2);
+        assert!(apps.join("Tuckshop.AppImage").exists() && menu.join("teku-other.desktop").exists());
+        use std::os::unix::fs::PermissionsExt;
+        assert_eq!(std::fs::metadata(&target).unwrap().permissions().mode() & 0o777, 0o755);
+        assert_eq!(std::fs::read_dir(&apps).unwrap().count(), 2, "no temp file left");
     }
 
     #[test]

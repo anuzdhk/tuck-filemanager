@@ -139,12 +139,22 @@ fn step_once(app: &adw::Application, s: &str) {
         }
         return;
     }
+    if let Some(rest) = s.strip_prefix("col-select:") {
+        // col-select:<column>:<name> — select in the column view.
+        if let Some((idx, name)) = rest.split_once(':')
+            && let Ok(idx) = idx.parse::<usize>()
+            && let Some(p) = win.as_ref().and_then(crate::window::Window::find).and_then(|w| w.active_pane())
+        {
+            p.column_select(idx, name);
+        }
+        return;
+    }
     if let Some(label) = s.strip_prefix("click-last:") {
         // Like click:, but the last match (e.g. a dialog's button on top).
         fn all(w: &gtk::Widget, label: &str, out: &mut Vec<gtk::Button>) {
             if let Some(b) = w.downcast_ref::<gtk::Button>()
                 && b.is_visible()
-                && b.label().as_deref() == Some(label)
+                && (b.label().as_deref() == Some(label) || b.tooltip_text().as_deref() == Some(label))
             {
                 out.push(b.clone());
             }
@@ -171,7 +181,7 @@ fn step_once(app: &adw::Application, s: &str) {
         fn find(w: &gtk::Widget, label: &str) -> Option<gtk::Button> {
             if let Some(b) = w.downcast_ref::<gtk::Button>()
                 && b.is_visible()
-                && b.label().as_deref() == Some(label)
+                && (b.label().as_deref() == Some(label) || b.tooltip_text().as_deref() == Some(label))
             {
                 return Some(b.clone());
             }
@@ -299,10 +309,13 @@ pub fn capture(win: &gtk::Window, path: &str) -> Result<(), String> {
 
 fn capture_widget(win: &gtk::Widget, path: &str) -> Result<(), String> {
     let (w, h) = (win.width(), win.height());
+    // A window behind others gets no frames, so a layout queued since the
+    // last one (a new column, say) never runs and GTK draws nothing: run it.
+    win.allocate(w, h, -1, None);
     let paintable = gtk::WidgetPaintable::new(Some(win));
     let snapshot = gtk::Snapshot::new();
     paintable.snapshot(&snapshot, w as f64, h as f64);
-    let node = snapshot.to_node().ok_or("nothing rendered")?;
+    let node = snapshot.to_node().ok_or_else(|| format!("nothing rendered ({w}x{h}, mapped {})", win.is_mapped()))?;
     let renderer = win.native().and_then(|n| n.renderer()).ok_or("no renderer")?;
     let tex = renderer.render_texture(&node, Some(&graphene::Rect::new(0.0, 0.0, w as f32, h as f32)));
     tex.save_to_png(path).map_err(|e| e.to_string())

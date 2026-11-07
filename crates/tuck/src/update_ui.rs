@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Preferences › Updates: check GitHub for a newer Tuck, show what's new,
 //! download the right package with progress (checksum-verified when the
-//! release publishes checksums), then install it through the normal install
-//! flow. Optionally checks once a day at startup.
+//! release publishes checksums), then install it: packages through the
+//! normal install flow (the package manager upgrades in place), an AppImage
+//! by replacing the installed one. Optionally checks once a day at startup.
 
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -14,6 +15,23 @@ use tuck_core::ops::Cancel;
 use tuck_core::update::{self, Release};
 
 use crate::theme_ui;
+
+/// Quit and start the new AppImage. It starts after a moment, once this
+/// instance has gone (a second start would just raise this window).
+fn restart_into(b: &gtk::Button, target: &std::path::Path) {
+    let spawned = std::process::Command::new("sh")
+        .args(["-c", "sleep 1; exec \"$0\""])
+        .arg(target)
+        .spawn();
+    match spawned {
+        Ok(_) => {
+            if let Some(app) = gtk::gio::Application::default() {
+                app.quit();
+            }
+        }
+        Err(e) => b.set_tooltip_text(Some(&format!("Couldn't restart: {e}"))),
+    }
+}
 
 fn now() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
@@ -228,11 +246,30 @@ fn show_result(group: &adw::PreferencesGroup, rows: &Rc<RefCell<Vec<gtk::Widget>
     let cancel = Rc::new(RefCell::new(Cancel::new()));
     let busy = Rc::new(std::cell::Cell::new(false));
     let downloaded: Rc<RefCell<Option<PathBuf>>> = Rc::default();
+    let replaced: Rc<RefCell<Option<PathBuf>>> = Rc::default();
     let rel = Rc::new(rel);
     download.connect_clicked(move |b| {
+        // AppImage swapped in: the button restarts into it.
+        if let Some(target) = replaced.borrow().clone() {
+            restart_into(b, &target);
+            return;
+        }
         // Done: the button now installs the downloaded file.
         let done = downloaded.borrow().clone();
         if let Some(path) = done {
+            if kind_found == update::PackageKind::AppImage {
+                let target = update::appimage_target(std::env::var_os("APPIMAGE").map(PathBuf::from).as_deref(), &tuck_core::paths::home());
+                let menu = tuck_core::install::appimage::Dirs::user().menu;
+                match update::replace_appimage(&path, &target, &menu) {
+                    Ok(_) => {
+                        row.set_subtitle(&glib::markup_escape_text(&format!("Installed to {}", target.display())));
+                        b.set_label("Restart Tuck");
+                        *replaced.borrow_mut() = Some(target);
+                    }
+                    Err(e) => row.set_subtitle(&glib::markup_escape_text(&format!("Couldn't install the update: {e}"))),
+                }
+                return;
+            }
             let win = b.root().and_downcast::<gtk::Window>().and_then(|d| d.transient_for().or(Some(d)));
             let tw = win.as_ref().and_then(crate::window::Window::find).or_else(crate::window::Window::any);
             if let Some(w) = tw {

@@ -208,6 +208,22 @@ destructive = "#ff7b63"
 success = "#8ff0a4"
 warning = "#f8e45c"
 "##),
+    ("amoled", r##"name = "AMOLED Black"
+dark = true
+[colors]
+window_bg = "#000000"
+window_fg = "#f2f2f5"
+view_bg = "#000000"
+sidebar_bg = "#000000"
+headerbar_bg = "#000000"
+card_bg = "#111114"
+popover_bg = "#111114"
+dim_fg = "#9a9aa5"
+accent = "#78aeed"
+destructive = "#ff7b63"
+success = "#8ff0a4"
+warning = "#f8e45c"
+"##),
     ("dracula", r##"name = "Dracula"
 dark = true
 [colors]
@@ -325,6 +341,7 @@ pub const CHOICES: &[(&str, &str)] = &[
     ("system", "Follow System"),
     ("light", "Light"),
     ("dark", "Dark"),
+    ("amoled", "AMOLED Black"),
     ("dracula", "Dracula"),
     ("material", "Material"),
     ("translucent", "Translucent"),
@@ -780,6 +797,6 @@ mod tests {
         for v in ["--window-bg-color", "--accent-bg-color", "--accent-color", "--sidebar-bg-color", "--tuck-dim-fg"] {
             assert!(css.contains(v), "{v}");
         }
-        assert_eq!(CHOICES.len(), 10);
+        assert_eq!(CHOICES.len(), 11);
     }
 }

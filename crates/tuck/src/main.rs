@@ -4,6 +4,7 @@
 mod appearance_ui;
 mod breadcrumb;
 mod cleaner_ui;
+mod columns_ui;
 mod debug;
 mod dialogs;
 mod jobs;
@@ -67,6 +68,7 @@ pub const SHORTCUTS: &[(&str, &[&str], &str, &str)] = &[
     ("win.view-mode::icons", &["<Ctrl>1"], "View", "Icons"),
     ("win.view-mode::compact", &["<Ctrl>2"], "View", "Compact"),
     ("win.view-mode::details", &["<Ctrl>3"], "View", "Details"),
+    ("win.view-mode::columns", &["<Ctrl>4"], "View", "Columns"),
     ("win.zoom-in", &["<Ctrl>plus", "<Ctrl>equal", "<Ctrl>KP_Add"], "View", "Zoom in"),
     ("win.zoom-out", &["<Ctrl>minus", "<Ctrl>KP_Subtract"], "View", "Zoom out"),
     ("win.zoom-reset", &["<Ctrl>0", "<Ctrl>KP_0"], "View", "Reset zoom"),

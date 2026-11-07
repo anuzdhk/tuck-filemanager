@@ -22,11 +22,17 @@ fn drives() -> Vec<Drive> {
     let dev = |p: &std::path::Path| std::fs::metadata(p).map(|m| m.dev()).ok();
     let home = tuck_core::paths::home();
     let mut seen: Vec<u64> = dev(std::path::Path::new("/")).into_iter().collect();
-    if let Some(d) = dev(&home)
-        && !seen.contains(&d)
-    {
-        seen.push(d);
-        out.push(Drive { name: "Home".into(), icon: "tuck-home-symbolic".into(), root: gio::File::for_path(&home), mount: None });
+    // The user's other partitions (a separate /home, a data disk).
+    for p in tuck_core::drives::list() {
+        if let Some(d) = dev(&p.mount) {
+            seen.push(d);
+        }
+        let name = if home.starts_with(&p.mount) {
+            "Home Disk".to_string()
+        } else {
+            p.mount.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| p.mount.display().to_string())
+        };
+        out.push(Drive { name, icon: "tuck-drive-symbolic".into(), root: gio::File::for_path(&p.mount), mount: None });
     }
     for m in gio::VolumeMonitor::get().mounts() {
         if m.is_shadowed() {

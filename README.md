@@ -66,7 +66,7 @@ Grab the file for your system from the [latest release](https://github.com/anuzd
 ## Features
 
 **Browse your way**
-- Icons, compact and details views, tabs, and split view (F3)
+- Icons, compact, details and **column** views (macOS-style columns that build up as you go deeper, Ctrl+4), tabs, and split view (F3)
 - A folder tree (F7), a built-in terminal that follows you (F4), and an Information panel (F11)
 - Live updates, type-ahead, a filter bar, selection mode, per-folder view settings, and session restore
 
@@ -92,7 +92,7 @@ Grab the file for your system from the [latest release](https://github.com/anuzd
 - See how full each drive is right in the sidebar, with details in Preferences › Storage
 
 **Make it yours**
-- 10 themes plus your own, any accent colour, text that always stays readable
+- 11 themes (including AMOLED Black) plus your own, any accent colour, text that always stays readable
 - Tuck, Material, or your **system's own icon theme**
 - Every keyboard shortcut can be changed, and Dolphin's service menus work in Tuck
 
@@ -106,11 +106,15 @@ Grab the file for your system from the [latest release](https://github.com/anuzd
     <td width="50%"><img src="docs/screenshots/readme/search.png" alt="Searching the home folder"><br><sub><b>Search</b> results as you type, with kind, date and size filters</sub></td>
   </tr>
   <tr>
+    <td width="50%"><img src="docs/screenshots/readme/columns.png" alt="Column view: each folder opens in the next column"><br><sub><b>Column view</b>: each folder opens in the next column, with a preview at the end (AMOLED Black theme)</sub></td>
+    <td width="50%"><img src="docs/screenshots/readme/sidebar.png" alt="Sidebar with Favourites, Bookmarks and Drives"><br><sub><b>Sidebar</b>: foldable sections, and how full each drive is</sub></td>
+  </tr>
+  <tr>
     <td width="50%"><img src="docs/screenshots/readme/cleaner.png" alt="The Cleaner listing caches that are safe to delete"><br><sub><b>Cleaner</b>: free space from caches that are safe to delete (Catppuccin theme)</sub></td>
     <td width="50%"><img src="docs/screenshots/readme/quick-look.png" alt="Quick Look previewing an image"><br><sub><b>Quick Look</b>: press Space to preview, arrows for the next file</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/screenshots/readme/preferences-themes.png" alt="Theme gallery in Preferences"><br><sub><b>Preferences</b>: pick one of 10 themes from live previews, any accent colour, or add your own theme</sub></td>
+    <td colspan="2"><img src="docs/screenshots/readme/preferences-themes.png" alt="Theme gallery in Preferences"><br><sub><b>Preferences</b>: pick one of 11 themes from live previews, any accent colour, or add your own theme</sub></td>
   </tr>
 </table>
 
@@ -123,6 +127,7 @@ Grab the file for your system from the [latest release](https://github.com/anuzd
 | Quick Look | <kbd>Space</kbd> |
 | Search | <kbd>Ctrl</kbd>+<kbd>F</kbd> |
 | New tab / close tab / reopen closed tab | <kbd>Ctrl</kbd>+<kbd>T</kbd> / <kbd>Ctrl</kbd>+<kbd>W</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> |
+| Icons / Compact / Details / Columns | <kbd>Ctrl</kbd>+<kbd>1</kbd> … <kbd>Ctrl</kbd>+<kbd>4</kbd> |
 | Split view | <kbd>F3</kbd> |
 | Terminal / folder tree / information panel | <kbd>F4</kbd> / <kbd>F7</kbd> / <kbd>F11</kbd> |
 | Go to a location | <kbd>Ctrl</kbd>+<kbd>L</kbd> |

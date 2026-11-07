@@ -431,7 +431,7 @@ pub fn page(dialog: &adw::PreferencesDialog) -> adw::PreferencesPage {
     access.add(&density);
     let motion = adw::SwitchRow::builder()
         .title("Reduce Motion")
-        .subtitle("Turn off animations, including animated GIF previews")
+        .subtitle("Turn off animations, including animated GIF previews. Also off when your desktop asks for reduced motion")
         .active(s.reduce_motion)
         .build();
     motion.connect_active_notify(|r| {

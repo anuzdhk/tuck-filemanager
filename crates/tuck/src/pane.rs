@@ -8,7 +8,7 @@
 //!       → MultiSelection            (Icons, Compact)
 //!       → TreeListModel → MultiSelection   (Details, expandable folders)
 
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, OnceCell, RefCell};
 use std::path::PathBuf;
 use std::rc::{Rc, Weak};
 use std::time::Instant;
@@ -84,6 +84,8 @@ pub struct Inner {
     selection_mode: Cell<bool>,
     drop_hover: RefCell<Option<gtk::Widget>>,
     drop_action: Cell<gdk::DragAction>,
+    /// Column view; set right after the pane exists (its hooks need the pane).
+    columns: OnceCell<crate::columns_ui::Columns>,
 }
 
 #[derive(Clone)]
@@ -195,7 +197,12 @@ impl Pane {
         compact.update_property(&[gtk::accessible::Property::Label("Files")]);
         details.update_property(&[gtk::accessible::Property::Label("Files")]);
 
-        let stack = gtk::Stack::builder().vexpand(true).hexpand(true).build();
+        let stack = gtk::Stack::builder()
+            .vexpand(true)
+            .hexpand(true)
+            .transition_type(gtk::StackTransitionType::Crossfade)
+            .transition_duration(150)
+            .build();
         for (name, view) in [
             ("icons", icons.clone().upcast::<gtk::Widget>()),
             ("compact", compact.clone().upcast()),
@@ -315,7 +322,9 @@ impl Pane {
             selection_mode: Cell::new(false),
             drop_hover: RefCell::new(None),
             drop_action: Cell::new(gdk::DragAction::empty()),
+            columns: OnceCell::new(),
         }));
+        pane.setup_columns();
         pane.build_factories();
         pane.build_columns();
         pane.wire(filter_close);
@@ -369,7 +378,8 @@ impl Pane {
     }
 
     pub fn can_go_back(&self) -> bool {
-        !self.0.back.borrow().is_empty()
+        let columns_open = self.settings().mode == ViewMode::Columns && self.cols().is_some_and(|c| c.depth() > 1);
+        columns_open || !self.0.back.borrow().is_empty()
     }
 
     pub fn can_go_forward(&self) -> bool {
@@ -393,8 +403,7 @@ impl Pane {
 
     /// Selected items, in view order.
     pub fn selected_items(&self) -> Vec<FileItem> {
-        let mode = self.settings().mode;
-        let sel = if mode == ViewMode::Details { self.details_sel() } else { &self.0.flat_sel };
+        let sel = self.current_sel();
         let set = sel.selection();
         let mut out = Vec::with_capacity(set.size() as usize);
         for i in 0..set.size() {
@@ -419,6 +428,12 @@ impl Pane {
     }
 
     pub fn go_back(&self) {
+        // Column view: Back closes the rightmost column first.
+        if self.settings().mode == ViewMode::Columns
+            && self.cols().is_some_and(|c| c.back())
+        {
+            return;
+        }
         let prev = self.0.back.borrow_mut().pop();
         if let Some(prev) = prev {
             self.0.forward.borrow_mut().push(self.location());
@@ -471,6 +486,9 @@ impl Pane {
         *self.0.monitor.borrow_mut() = None;
         *self.0.location.borrow_mut() = file.clone();
         self.set_searching(false);
+        if let Some(c) = self.cols() {
+            c.reset();
+        }
 
         // Per-folder view settings, keeping the filter bar's text.
         let key = settings_key(&file);
@@ -513,12 +531,25 @@ impl Pane {
                 Err(e) => pane.show_error(&e),
             }
             pane.show_view();
+            pane.play_enter();
             pane.update_subtitle();
             pane.select_pending();
             pane.apply_pending_selection();
             pane.emit(PaneEvent::Location);
         });
         *self.0.load_task.borrow_mut() = Some(task);
+    }
+
+    /// A quick fade-in when a folder's contents arrive.
+    fn play_enter(&self) {
+        let stack = self.0.stack.clone();
+        // Restart the CSS animation if the last one is still on.
+        stack.remove_css_class("entering");
+        glib::idle_add_local_once(move || {
+            stack.add_css_class("entering");
+            let s = stack.clone();
+            glib::timeout_add_local_once(std::time::Duration::from_millis(260), move || s.remove_css_class("entering"));
+        });
     }
 
     fn store(&self) -> gio::ListStore {
@@ -560,6 +591,10 @@ impl Pane {
         self.0.icons.set_model(if mode == ViewMode::Icons { Some(&self.0.flat_sel) } else { none });
         self.0.compact.set_model(if mode == ViewMode::Compact { Some(&self.0.flat_sel) } else { none });
         self.0.details.set_model(if mode == ViewMode::Details { Some(self.details_sel()) } else { none });
+        if let Some(c) = self.cols() {
+            c.set_icon_size(self.settings().icon_size() as i32);
+            c.attach(mode == ViewMode::Columns, &self.0.flat_sel);
+        }
     }
 
     /// Add listed items. Big batches build a new store and swap it in: GTK's
@@ -596,6 +631,7 @@ impl Pane {
         match self.settings().mode {
             ViewMode::Icons => self.0.icons.scroll_to(pos, flags, None),
             ViewMode::Compact => self.0.compact.scroll_to(pos, flags, None),
+            ViewMode::Columns => self.select_in_first_column(pos),
             ViewMode::Details => {
                 // Root items keep their position only if nothing above is
                 // expanded; find the row for this item instead.
@@ -843,6 +879,11 @@ impl Pane {
             }
             let Ok(info) = info else { return };
             let item = FileItem::from_info(file.clone(), info);
+            // Replacing an item drops it from the selection; keep it selected
+            // (e.g. after rating it in the info panel).
+            if pane.selected_items().iter().any(|i| i.file().equal(&file)) {
+                pane.0.pending_select.borrow_mut().insert(item.raw_name());
+            }
             match pane.position_of(&file) {
                 Some(pos) => pane.with_focus_guard(|| pane.store().splice(pos, 1, &[item])),
                 None => pane.store().append(&item),
@@ -924,6 +965,12 @@ impl Pane {
             ViewMode::Icons => self.0.icons.grab_focus(),
             ViewMode::Compact => self.0.compact.grab_focus(),
             ViewMode::Details => self.0.details.grab_focus(),
+            ViewMode::Columns => {
+                if let Some(c) = self.cols() {
+                    c.focus();
+                }
+                true
+            }
         };
     }
 
@@ -940,16 +987,12 @@ impl Pane {
     pub fn select_all(&self) {
         match self.settings().mode {
             ViewMode::Details => self.details_sel().select_all(),
-            _ => self.0.flat_sel.select_all(),
+            _ => self.current_sel().select_all(),
         };
     }
 
     pub fn invert_selection(&self) {
-        let sel = if self.settings().mode == ViewMode::Details {
-            self.details_sel()
-        } else {
-            &self.0.flat_sel
-        };
+        let sel = self.current_sel();
         let n = sel.n_items();
         let current = sel.selection();
         let inverted = gtk::Bitset::new_range(0, n);
@@ -1158,8 +1201,79 @@ impl Pane {
 
     // ------------------------------------------------------- selection API
 
-    fn current_sel(&self) -> &gtk::MultiSelection {
-        if self.settings().mode == ViewMode::Details { self.details_sel() } else { &self.0.flat_sel }
+    fn current_sel(&self) -> gtk::MultiSelection {
+        match self.settings().mode {
+            ViewMode::Details => self.details_sel().clone(),
+            ViewMode::Columns => self.cols().and_then(|c| c.active_sel()).unwrap_or_else(|| self.0.flat_sel.clone()),
+            _ => self.0.flat_sel.clone(),
+        }
+    }
+
+    /// Column view test hook: select `name` in column `idx`.
+    pub fn column_select(&self, idx: usize, name: &str) {
+        if let Some(c) = self.cols() {
+            c.select_name(idx, name);
+        }
+    }
+
+    fn cols(&self) -> Option<&crate::columns_ui::Columns> {
+        self.0.columns.get()
+    }
+
+    /// The column view: its first column is this pane's own model.
+    fn setup_columns(&self) {
+        let w = self.downgrade();
+        let hooks = crate::columns_ui::Hooks {
+            sorter: self.0.sorter.clone().upcast(),
+            filter: self.0.filter.clone().upcast(),
+            activate: Box::new({
+                let w = w.clone();
+                move |item| {
+                    if let Some(p) = Pane::from_weak(&w) {
+                        p.activate_item(item);
+                    }
+                }
+            }),
+            key: Box::new({
+                let w = w.clone();
+                move |k, m| Pane::from_weak(&w).map(|p| p.on_key(k, m)).unwrap_or(glib::Propagation::Proceed)
+            }),
+            changed: Box::new({
+                let w = w.clone();
+                move || {
+                    if let Some(p) = Pane::from_weak(&w) {
+                        p.update_subtitle();
+                        p.emit(PaneEvent::Selection);
+                        // Back may now close a column: refresh its button.
+                        p.emit(PaneEvent::Settings);
+                    }
+                }
+            }),
+            setup_cell: Box::new({
+                let w = w.clone();
+                move |cell| {
+                    if let Some(p) = Pane::from_weak(&w) {
+                        p.setup_drag_source(cell);
+                    }
+                }
+            }),
+            bind_cell: bind_item,
+        };
+        let cols = crate::columns_ui::Columns::new(self.0.flat_sel.clone(), hooks);
+        self.0.stack.add_named(&cols.widget(), Some("columns"));
+        let _ = self.0.columns.set(cols);
+        self.attach_views();
+    }
+
+    /// The folder new items and pastes go into: in the column view, the
+    /// column you're working in; otherwise this pane's folder.
+    pub fn working_path(&self) -> Option<PathBuf> {
+        if self.settings().mode == ViewMode::Columns
+            && let Some(dir) = self.cols().and_then(|c| c.active_dir())
+        {
+            return dir.path();
+        }
+        self.path()
     }
 
     fn position_in_view(&self, item: &FileItem) -> Option<u32> {
@@ -1182,7 +1296,7 @@ impl Pane {
     /// Move the selection by `delta` items (Quick Look's arrow keys) and
     /// return the newly selected item.
     pub fn neighbor(&self, delta: i32) -> Option<FileItem> {
-        let sel = self.current_sel().clone();
+        let sel = self.current_sel();
         let n = sel.n_items();
         if n == 0 {
             return None;
@@ -1198,6 +1312,12 @@ impl Pane {
             ViewMode::Icons => self.0.icons.scroll_to(new, flags, None),
             ViewMode::Compact => self.0.compact.scroll_to(new, flags, None),
             ViewMode::Details => self.0.details.scroll_to(new, None::<&gtk::ColumnViewColumn>, flags, None),
+            ViewMode::Columns => {
+                sel.select_item(new, true);
+                if let Some(c) = self.cols() {
+                    c.scroll_to(new);
+                }
+            }
         }
         sel.item(new).and_then(|o| unwrap_item(&o))
     }
@@ -1217,7 +1337,7 @@ impl Pane {
         if self.0.pending_select.borrow().is_empty() {
             return;
         }
-        let sel = self.current_sel().clone();
+        let sel = self.current_sel();
         let mut first = None;
         for i in 0..sel.n_items() {
             let Some(item) = sel.item(i).and_then(|o| unwrap_item(&o)) else { continue };
@@ -1232,6 +1352,11 @@ impl Pane {
                 ViewMode::Icons => self.0.icons.scroll_to(i, flags, None),
                 ViewMode::Compact => self.0.compact.scroll_to(i, flags, None),
                 ViewMode::Details => self.0.details.scroll_to(i, None::<&gtk::ColumnViewColumn>, flags, None),
+                ViewMode::Columns => {
+                    if let Some(c) = self.cols() {
+                        c.scroll_to(i);
+                    }
+                }
             }
         }
     }
@@ -1262,6 +1387,11 @@ impl Pane {
     pub(crate) fn show_context_menu(&self, x: f64, y: f64, on_item: Option<FileItem>) {
         let menu = match &on_item {
             Some(item) => {
+                if self.settings().mode == ViewMode::Columns
+                    && let Some(c) = self.cols()
+                {
+                    c.activate_column_of(item);
+                }
                 if !self.is_selected(item) {
                     self.select_only(item);
                 }
@@ -1530,6 +1660,15 @@ impl Pane {
             ViewMode::Details => {
                 self.0.details.scroll_to(pos as u32, None::<&gtk::ColumnViewColumn>, flags, None)
             }
+            // Type-ahead searches the first column.
+            ViewMode::Columns => self.select_in_first_column(pos as u32),
+        }
+    }
+
+    fn select_in_first_column(&self, pos: u32) {
+        self.0.flat_sel.select_item(pos, true);
+        if let Some(c) = self.cols() {
+            c.scroll_to(pos);
         }
     }
 

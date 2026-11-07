@@ -197,7 +197,10 @@ impl FoldersPanel {
                 // After layout, so the row lands in view (centred if far).
                 let view = self.0.view.clone();
                 glib::timeout_add_local_once(std::time::Duration::from_millis(60), move || {
-                    view.scroll_to(pos, gtk::ListScrollFlags::NONE, None);
+                    // The tree may have changed in those 60 ms.
+                    if view.model().is_some_and(|m| pos < m.n_items()) {
+                        view.scroll_to(pos, gtk::ListScrollFlags::NONE, None);
+                    }
                 });
                 return;
             }

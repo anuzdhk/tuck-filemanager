@@ -18,6 +18,8 @@ pub enum ViewMode {
     Icons,
     Compact,
     Details,
+    /// macOS-style columns: each selected folder opens in the next column.
+    Columns,
 }
 
 impl ViewMode {
@@ -26,11 +28,12 @@ impl ViewMode {
             ViewMode::Icons => "icons",
             ViewMode::Compact => "compact",
             ViewMode::Details => "details",
+            ViewMode::Columns => "columns",
         }
     }
 
     pub fn from_id(s: &str) -> Option<Self> {
-        [ViewMode::Icons, ViewMode::Compact, ViewMode::Details].into_iter().find(|m| m.id() == s)
+        [ViewMode::Icons, ViewMode::Compact, ViewMode::Details, ViewMode::Columns].into_iter().find(|m| m.id() == s)
     }
 }
 
@@ -94,7 +97,8 @@ impl ViewSettings {
     pub fn zoom_index(&self) -> usize {
         match self.mode {
             ViewMode::Icons => self.zoom_icons,
-            ViewMode::Compact => self.zoom_compact,
+            // Columns share Compact's zoom: both are small-icon lists.
+            ViewMode::Compact | ViewMode::Columns => self.zoom_compact,
             ViewMode::Details => self.zoom_details,
         }
     }
@@ -107,7 +111,7 @@ impl ViewSettings {
     pub fn zoom_by(&mut self, delta: i32) -> bool {
         let slot = match self.mode {
             ViewMode::Icons => &mut self.zoom_icons,
-            ViewMode::Compact => &mut self.zoom_compact,
+            ViewMode::Compact | ViewMode::Columns => &mut self.zoom_compact,
             ViewMode::Details => &mut self.zoom_details,
         };
         let new = (*slot as i32 + delta).clamp(0, ZOOM_LEVELS.len() as i32 - 1) as usize;
@@ -120,7 +124,7 @@ impl ViewSettings {
         let d = Self::default();
         match self.mode {
             ViewMode::Icons => self.zoom_icons = d.zoom_icons,
-            ViewMode::Compact => self.zoom_compact = d.zoom_compact,
+            ViewMode::Compact | ViewMode::Columns => self.zoom_compact = d.zoom_compact,
             ViewMode::Details => self.zoom_details = d.zoom_details,
         }
     }
@@ -149,13 +153,14 @@ impl FolderViews {
         self.default
     }
 
+    /// Remember `v` for this folder. Its view mode and sort order also become
+    /// the default for folders that have no settings of their own, so the
+    /// next new folder opens the way you last chose (e.g. Columns).
     pub fn set(&mut self, folder: &Path, v: ViewSettings) {
         if self.per_folder {
-            if v == self.default {
-                self.folders.remove(folder);
-            } else {
-                self.folders.insert(folder.to_path_buf(), v);
-            }
+            self.folders.insert(folder.to_path_buf(), v);
+            self.default.mode = v.mode;
+            self.default.sort = v.sort;
         } else {
             self.default = v;
         }
@@ -211,6 +216,8 @@ pub struct AppSettings {
     pub last_update_check: i64,
     /// Sidebar width in pixels, set by dragging its edge.
     pub sidebar_width: f64,
+    /// Sidebar sections folded away (by id: "favourites", "drives", …).
+    pub sidebar_collapsed: Vec<String>,
 }
 
 impl Default for AppSettings {
@@ -226,6 +233,7 @@ impl Default for AppSettings {
             check_updates: false,
             last_update_check: 0,
             sidebar_width: 240.0,
+            sidebar_collapsed: Vec::new(),
         }
     }
 }
@@ -323,10 +331,15 @@ mod tests {
         v.mode = ViewMode::Details;
         f.set(a, v);
         assert_eq!(f.get(a).mode, ViewMode::Details);
-        assert_eq!(f.get(Path::new("/b")).mode, ViewMode::Icons);
-        // Setting back to default drops the override.
-        f.set(a, f.default);
-        assert!(f.folders.is_empty());
+        // New folders follow the last choice; /a keeps its own.
+        assert_eq!(f.get(Path::new("/b")).mode, ViewMode::Details);
+        let mut c = f.get(Path::new("/c"));
+        c.mode = ViewMode::Columns;
+        c.sort.descending = true;
+        f.set(Path::new("/c"), c);
+        assert_eq!(f.get(a).mode, ViewMode::Details);
+        assert_eq!(f.get(Path::new("/b")).mode, ViewMode::Columns);
+        assert!(f.get(Path::new("/b")).sort.descending);
         f.set(a, v);
         f.apply_to_all(v);
         assert!(f.folders.is_empty());

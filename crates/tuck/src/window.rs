@@ -134,6 +134,7 @@ impl Window {
             (ViewMode::Icons, "tuck-grid-symbolic", "Icons (Ctrl+1)"),
             (ViewMode::Compact, "tuck-compact-symbolic", "Compact (Ctrl+2)"),
             (ViewMode::Details, "tuck-details-symbolic", "Details (Ctrl+3)"),
+            (ViewMode::Columns, "tuck-columns-symbolic", "Columns (Ctrl+4)"),
         ] {
             let b = gtk::ToggleButton::builder().icon_name(icon).tooltip_text(tip).build();
             b.update_property(&[gtk::accessible::Property::Label(tip.split(" (").next().unwrap_or(tip))]);
@@ -167,9 +168,14 @@ impl Window {
         menu.update_property(&[gtk::accessible::Property::Label("Main Menu")]);
 
         let jobs = Jobs::new();
-        let header = adw::HeaderBar::builder().title_widget(&breadcrumb.widget()).build();
+        // The path sits on the left, after the navigation buttons, and takes
+        // the free space up to the search field.
+        let middle = gtk::Box::builder().spacing(8).hexpand(true).build();
+        middle.append(&breadcrumb.widget());
+        let header = adw::HeaderBar::builder().show_title(false).build();
         header.pack_start(&sidebar_toggle);
         header.pack_start(&nav);
+        header.pack_start(&middle);
         header.pack_end(&menu);
         header.pack_end(&info_button);
         header.pack_end(&split_button);
@@ -214,6 +220,44 @@ impl Window {
         search_button.update_property(&[gtk::accessible::Property::Label("Search")]);
         search.revealer.bind_property("reveal-child", &search_button, "active").bidirectional().sync_create().build();
         header.pack_end(&search_button);
+        // A search field when the path is short; just the button once the
+        // path needs the room. Either opens the search bar.
+        let pill = gtk::Button::builder().css_classes(["search-pill"]).valign(gtk::Align::Center).tooltip_text("Search (Ctrl+F)").build();
+        let pill_box = gtk::Box::builder().spacing(8).build();
+        pill_box.append(&gtk::Image::from_icon_name("tuck-search-symbolic"));
+        pill_box.append(&gtk::Label::builder().label("Search files…").hexpand(true).xalign(0.0).build());
+        pill_box.append(&gtk::Label::builder().label("Ctrl+F").css_classes(["dim-label", "caption"]).build());
+        pill.set_child(Some(&pill_box));
+        pill.update_property(&[gtk::accessible::Property::Label("Search")]);
+        middle.append(&pill);
+        {
+            let sb = search_button.clone();
+            pill.connect_clicked(move |_| sb.set_active(true));
+        }
+        let fits = Rc::new(std::cell::Cell::new(true));
+        let sync = {
+            let (pill, sb, fits) = (pill.clone(), search_button.clone(), fits.clone());
+            move || {
+                let wide = fits.get() && !sb.is_active();
+                pill.set_visible(wide);
+                sb.set_visible(!wide);
+            }
+        };
+        sync();
+        {
+            let (fits, sync) = (fits.clone(), sync.clone());
+            breadcrumb.width_adjustment().connect_changed(move |adj| {
+                // Collapse when the path is clipped; expand when it would fit
+                // beside the field again (its width plus a little slack).
+                let room = 220.0 + 24.0; // the field's min-width in style.css, plus spacing
+                let now = if fits.get() { adj.upper() <= adj.page_size() + 1.0 } else { adj.upper() + room <= adj.page_size() };
+                if now != fits.get() {
+                    fits.set(now);
+                    sync();
+                }
+            });
+        }
+        search_button.connect_active_notify(move |_| sync());
         let content_tv = adw::ToolbarView::new();
         content_tv.add_top_bar(&header);
         content_tv.add_top_bar(&search.revealer);
@@ -916,6 +960,7 @@ impl Window {
                 if self.is_active(pane) {
                     self.sync_actions();
                     self.sync_selection_bar();
+                    self.0.back.set_sensitive(pane.can_go_back());
                 }
             }
             PaneEvent::OpenInNewTab(f) => {

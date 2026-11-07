@@ -60,7 +60,9 @@ pub const UI_ICONS: &[(&str, &str, &str)] = &[
     ("star-filled", "star-filled", "star-fill"),
     ("tag", "tag", "sell"),
     ("server", "server", "hard_drive"),
-    ("cleaner", "sparkles", "cleaning_services"),
+    ("cleaner", "mop", "mop"),
+    ("settings", "settings", "settings"),
+    ("columns", "columns-3", "view_column"),
 ];
 
 /// System icon style: the standard freedesktop names for each UI icon, best
@@ -106,6 +108,8 @@ const SYSTEM_UI: &[(&str, &[&str])] = &[
     ("tag", &["tag-symbolic", "bookmark-new-symbolic"]),
     ("server", &["network-server-symbolic"]),
     ("cleaner", &["edit-clear-all-symbolic", "user-trash-full-symbolic"]),
+    ("columns", &["view-column-symbolic", "view-dual-symbolic"]),
+    ("settings", &["emblem-system-symbolic", "preferences-system-symbolic"]),
 ];
 
 /// The file holding `names[0..]` in the desktop's icon theme, if any:
@@ -155,7 +159,6 @@ struct State {
     settings: AppSettings,
     provider: gtk::CssProvider,
     base_dpi: i32,
-    base_animations: bool,
     default_search: Vec<PathBuf>,
     icon_root: PathBuf,
     generation: u32,
@@ -198,7 +201,6 @@ pub fn init() {
         settings: loaded,
         provider,
         base_dpi,
-        base_animations: gs.is_gtk_enable_animations(),
         default_search: theme.search_path(),
         icon_root,
         generation: 0,
@@ -208,6 +210,10 @@ pub fn init() {
     };
     STATE.with(|s| *s.borrow_mut() = Some(state));
     apply();
+    // GTK 4.20+ reports the desktop's reduced-motion preference.
+    if gs.find_property(REDUCED_MOTION).is_some() {
+        gs.connect_notify_local(Some(REDUCED_MOTION), |_, _| apply());
+    }
     // Follow the desktop's light/dark and high-contrast settings live.
     let sm = adw::StyleManager::default();
     sm.connect_dark_notify(|_| {
@@ -220,6 +226,18 @@ pub fn init() {
             apply_colors();
         }
     });
+}
+
+const REDUCED_MOTION: &str = "gtk-interface-reduced-motion";
+
+/// Has the desktop asked apps to reduce motion (GNOME Accessibility ›
+/// Reduce Animation, or the portal elsewhere)?
+fn system_reduced_motion(gs: &gtk::Settings) -> bool {
+    if gs.find_property(REDUCED_MOTION).is_none() {
+        return false;
+    }
+    let v = gs.property_value(REDUCED_MOTION);
+    gtk::glib::EnumValue::from_value(&v).is_some_and(|(_, e)| e.nick() == "reduce")
 }
 
 pub fn settings() -> AppSettings {
@@ -393,7 +411,13 @@ fn apply() {
         let Some(st) = s.as_mut() else { return };
         let gs = gtk::Settings::default().expect("settings");
         gs.set_gtk_xft_dpi((st.base_dpi as f64 * st.settings.text_scale).round() as i32);
-        gs.set_gtk_enable_animations(st.base_animations && !st.settings.reduce_motion);
+        // Tuck's own switch or the desktop's "reduced motion" turns animations
+        // off; otherwise GTK follows the desktop's animation setting live.
+        if st.settings.reduce_motion || system_reduced_motion(&gs) {
+            gs.set_gtk_enable_animations(false);
+        } else {
+            gs.reset_property("gtk-enable-animations");
+        }
         write_ui_icons(st);
     });
     FILE_ICONS.with(|c| c.borrow_mut().clear());

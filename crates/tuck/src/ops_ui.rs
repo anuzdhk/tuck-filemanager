@@ -83,7 +83,7 @@ impl Window {
         add("new-folder", |w| w.op_new_folder());
         add("copy-path", |w| w.op_copy_path());
         add("open-terminal", |w| {
-            if let Some(dir) = w.active_pane().and_then(|p| p.path()) {
+            if let Some(dir) = w.active_pane().and_then(|p| p.working_path()) {
                 w.op_terminal(&dir);
             }
         });
@@ -124,7 +124,7 @@ impl Window {
         let weak = self.downgrade();
         a.connect_activate(move |_, v| {
             let (Some(w), Some(i)) = (Window::from_weak(&weak), v.and_then(|v| v.get::<u32>())) else { return };
-            let cwd = w.active_pane().and_then(|p| p.path());
+            let cwd = w.active_pane().and_then(|p| p.working_path());
             if let Err(e) = crate::services_ui::run(i, &w.selection(), cwd.as_deref()) {
                 w.toast(&e);
             }
@@ -186,7 +186,7 @@ impl Window {
     }
 
     fn current_dir(&self) -> Option<PathBuf> {
-        let p = self.active_pane()?.path();
+        let p = self.active_pane()?.working_path();
         if p.is_none() {
             self.toast("You can't create or paste items in this location.");
         }

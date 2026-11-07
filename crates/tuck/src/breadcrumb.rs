@@ -69,6 +69,12 @@ impl Breadcrumb {
         self.0.stack.clone().upcast()
     }
 
+    /// The path's scroll range: `upper` is the width the path wants,
+    /// `page_size` the width it has.
+    pub fn width_adjustment(&self) -> gtk::Adjustment {
+        self.0.scroller.hadjustment()
+    }
+
     pub fn connect_navigate(&self, f: impl Fn(gio::File) + 'static) {
         *self.0.on_navigate.borrow_mut() = Some(Rc::new(f));
     }
