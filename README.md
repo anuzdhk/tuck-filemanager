@@ -5,7 +5,7 @@
 # Tuck
 
 **A fast, friendly file manager for Linux.**<br>
-Dolphin's power with a calm, simple design: Quick Look, instant search, one-click archives and app installs built in.
+Dolphin's power with a calm, simple design: Quick Look, instant search, one-click archives and app installs built in. And yes it supports 3d Model Viewing too.
 
 [![Stars](https://img.shields.io/github/stars/anuzdhk/tuck-filemanager?style=for-the-badge&logo=github&label=Stars)](https://github.com/anuzdhk/tuck-filemanager/stargazers)
 [![Watchers](https://img.shields.io/github/watchers/anuzdhk/tuck-filemanager?style=for-the-badge&logo=github&label=Watching)](https://github.com/anuzdhk/tuck-filemanager/watchers)
