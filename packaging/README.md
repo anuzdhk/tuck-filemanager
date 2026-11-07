@@ -80,14 +80,16 @@ the release workflow; it isn't available on the development machine.
 
 ### AppImage: `packaging/appimage/build.sh`
 
-Uses pinned releases of linuxdeploy and linuxdeploy-plugin-gtk to bundle GTK 4,
-libadwaita and the other libraries. Build it on the oldest supported system
-(the workflow uses Debian 13), because the AppImage uses the host's glibc.
-When Tuck runs from an AppImage, the updater offers the AppImage.
+Uses quick-sharun from pkgforge-dev's Anylinux-AppImages (pinned revision) in an
+Arch Linux container. It bundles every library, glibc and its loader included,
+so the AppImage doesn't depend on the host's C library and runs on older
+distributions too. `.github/workflows/appimage.yml` builds it and checks that it
+starts on Ubuntu 22.04, the system the AppImage catalog tests on; run that
+workflow by hand to try a change without releasing. When Tuck runs from an
+AppImage, the updater offers the AppImage.
 
-Not yet tested: it runs only in the release workflow (it downloads and runs
-linuxdeploy). GStreamer plugins aren't bundled, so video and audio previews
-in Quick Look use the host's GStreamer if present.
+GStreamer plugins aren't bundled, so video and audio previews in Quick Look use
+the host's GStreamer if present.
 
 ### Arch: `packaging/arch/PKGBUILD`
 

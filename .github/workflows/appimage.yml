@@ -1,0 +1,46 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Build the AppImage (glibc bundled, see packaging/appimage/build.sh) and
+# check that it starts on the oldest Ubuntu LTS still supported, the system
+# the AppImage catalog (appimage.github.io) tests on. Called by release.yml;
+# run it by hand from the Actions tab to try a change without releasing.
+name: AppImage
+on:
+  workflow_dispatch:
+  workflow_call:
+  # Rebuild whenever the AppImage build itself changes.
+  push:
+    paths: ['packaging/appimage/**', '.github/workflows/appimage.yml']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install build dependencies
+        run: |
+          pacman -Syu --noconfirm --needed base-devel git cargo wget patchelf strace xorg-server-xvfb \
+            gtk4 libadwaita gtksourceview5 poppler-glib libarchive vte4 librsvg hicolor-icon-theme
+      - uses: actions/checkout@v7
+      - name: Build the AppImage
+        run: packaging/appimage/build.sh "$PWD/out"
+      - uses: actions/upload-artifact@v7
+        with: { name: appimage, path: out/*.AppImage }
+
+  old-system:
+    needs: build
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    steps:
+      - uses: actions/download-artifact@v8
+        with: { name: appimage, path: dist }
+      - name: Install a virtual display
+        run: apt-get update && apt-get install -y --no-install-recommends xvfb xauth
+      - name: Tuck starts on Ubuntu 22.04
+        run: |
+          chmod +x dist/*.AppImage
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          code=0
+          timeout 20 xvfb-run -a dist/*.AppImage > log 2>&1 || code=$?
+          cat log
+          # Still running when the timeout stopped it (124) means it started.
+          [ "$code" = 124 ]

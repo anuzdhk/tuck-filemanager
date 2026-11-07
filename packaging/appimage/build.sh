@@ -1,57 +1,39 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Build Tuck-VERSION-ARCH.AppImage with linuxdeploy and its GTK plugin.
-# Build on the oldest system you want to support that still has
-# GTK >= 4.16 and libadwaita >= 1.6 (the release workflow uses Debian 13):
-# the AppImage carries Tuck's libraries but uses the host's glibc.
+# Build Tuck-VERSION-ARCH.AppImage with quick-sharun (pkgforge-dev's
+# Anylinux-AppImages). It bundles every library Tuck uses, glibc and its
+# dynamic loader included, so the AppImage doesn't depend on the host's C
+# library and runs on old and new distributions alike.
 #
 #   packaging/appimage/build.sh [OUTDIR]
 #
-# Needs: cargo, the build dependencies from the README, wget or curl, file.
+# Run it as root in an Arch Linux container with the build dependencies
+# installed (see .github/workflows/appimage.yml): it installs Tuck into /usr
+# first, because quick-sharun collects files from the system.
 set -eu
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 OUT=${1:-$ROOT/target/appimage}
 ARCH=$(uname -m)
 VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -n1)
-TOOLS="$ROOT/target/appimage-tools"
-APPDIR="$ROOT/target/appimage-AppDir"
-
-fetch() { # fetch URL FILE
-    if command -v wget >/dev/null 2>&1; then wget -q -O "$2" "$1"; else curl -fsSL -o "$2" "$1"; fi
-}
-
-mkdir -p "$TOOLS" "$OUT"
-# Pinned releases of linuxdeploy and its GTK plugin.
-LD="$TOOLS/linuxdeploy-$ARCH.AppImage"
-PLUGIN="$TOOLS/linuxdeploy-plugin-gtk.sh"
-[ -x "$LD" ] || { fetch "https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-$ARCH.AppImage" "$LD"; chmod +x "$LD"; }
-[ -x "$PLUGIN" ] || { fetch "https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/7a3fbc31a9e5075073ff8790f26effbac5f84453/linuxdeploy-plugin-gtk.sh" "$PLUGIN"; chmod +x "$PLUGIN"; }
+WORK="$ROOT/target/appimage-work"
+# A pinned revision; quick-sharun pins the tools it downloads by checksum.
+QS_REV=1a5594c7f47ec5cb46ce70f6e11b5c5781f17f5f
 
 (cd "$ROOT" && cargo build --release --locked -p tuck)
-rm -rf "$APPDIR"
-"$ROOT/install.sh" --no-build --prefix /usr --destdir "$APPDIR" >/dev/null
-rm -rf "$APPDIR/usr/share/tuck"
+"$ROOT/install.sh" --no-build --prefix /usr
 
-# linuxdeploy can't use FUSE inside containers.
-export APPIMAGE_EXTRACT_AND_RUN=1
-export DEPLOY_GTK_VERSION=4
-export PATH="$TOOLS:$PATH"
-export LDAI_OUTPUT="Tuck-$VERSION-$ARCH.AppImage"
-cd "$OUT"
-# 1. Bundle the libraries and GTK support files into the AppDir.
-"$LD" --appdir "$APPDIR" \
-    --plugin gtk \
-    --desktop-file "$APPDIR/usr/share/applications/io.github.anuzdhk.Tuck.desktop" \
-    --icon-file "$ROOT/data/icons/app/hicolor/256x256/apps/io.github.anuzdhk.Tuck.png"
-# 2. The GTK plugin's start-up hook forces GTK_THEME=Adwaita:… and
-#    GDK_BACKEND=x11. Both are wrong for a libadwaita app: the forced theme
-#    fights libadwaita's own styling (mixed light/dark, invisible text) and
-#    the forced X11 backend loses native Wayland. Drop those two lines.
-HOOK="$APPDIR/apprun-hooks/linuxdeploy-plugin-gtk.sh"
-if [ -f "$HOOK" ]; then
-    sed -i -e '/^export GTK_THEME=/d' -e '/^export GDK_BACKEND=x11/d' "$HOOK"
-    ! grep -q '^export GTK_THEME=\|^export GDK_BACKEND=' "$HOOK" || { echo "couldn't patch $HOOK" >&2; exit 1; }
-fi
-# 3. Pack the AppImage.
-"$LD" --appdir "$APPDIR" --output appimage
-echo "Built $OUT/$LDAI_OUTPUT"
+rm -rf "$WORK"
+mkdir -p "$WORK" "$OUT"
+cd "$WORK"
+wget -q -O quick-sharun "https://raw.githubusercontent.com/pkgforge-dev/Anylinux-AppImages/$QS_REV/useful-tools/quick-sharun.sh"
+chmod +x quick-sharun
+
+export ICON=/usr/share/icons/hicolor/256x256/apps/io.github.anuzdhk.Tuck.png
+export DESKTOP=/usr/share/applications/io.github.anuzdhk.Tuck.desktop
+export OUTPATH="$OUT"
+export OUTNAME="Tuck-$VERSION-$ARCH.AppImage"
+./quick-sharun /usr/bin/tuck
+./quick-sharun --make-appimage
+# Starts it under a virtual display and fails the build if it crashes.
+./quick-sharun --test "$OUT/$OUTNAME"
+echo "Built $OUT/$OUTNAME"
