@@ -63,6 +63,7 @@ pub const UI_ICONS: &[(&str, &str, &str)] = &[
     ("cleaner", "mop", "mop"),
     ("settings", "settings", "settings"),
     ("columns", "columns-3", "view_column"),
+    ("addons", "puzzle", "extension"),
 ];
 
 /// System icon style: the standard freedesktop names for each UI icon, best
@@ -74,8 +75,8 @@ const SYSTEM_UI: &[(&str, &[&str])] = &[
     ("chevron", &["go-next-symbolic"]),
     ("sidebar", &["sidebar-show-symbolic", "view-sidebar-start-symbolic", "view-dual-symbolic"]),
     ("grid", &["view-grid-symbolic", "view-app-grid-symbolic"]),
-    ("compact", &["view-list-bullet-symbolic", "view-list-symbolic"]),
-    ("details", &["view-list-symbolic", "view-paged-symbolic"]),
+    ("compact", &["view-list-compact-symbolic", "view-list-bullet-symbolic", "view-list-text-symbolic", "view-list-symbolic"]),
+    ("details", &["view-list-details-symbolic", "view-list-symbolic", "view-paged-symbolic"]),
     ("split", &["view-dual-symbolic", "view-split-left-right-symbolic"]),
     ("info", &["info-outline-symbolic", "dialog-information-symbolic", "help-about-symbolic"]),
     ("menu", &["open-menu-symbolic"]),
@@ -109,6 +110,7 @@ const SYSTEM_UI: &[(&str, &[&str])] = &[
     ("server", &["network-server-symbolic"]),
     ("cleaner", &["edit-clear-all-symbolic", "user-trash-full-symbolic"]),
     ("columns", &["view-column-symbolic", "view-dual-symbolic"]),
+    ("addons", &["application-x-addon-symbolic", "puzzle-piece-symbolic"]),
     ("settings", &["emblem-system-symbolic", "preferences-system-symbolic"]),
 ];
 
@@ -466,13 +468,22 @@ fn write_ui_icons(st: &mut State) {
     fn find(set: &'static [(&'static str, &'static str)], name: &str) -> Option<&'static str> {
         set.iter().find(|(n, _)| *n == name).map(|(_, s)| *s)
     }
+    // The view buttons must look different: some themes draw the list
+    // icons the same (or link one to the other), so a repeat uses Tabler's.
+    let mut view_icons: Vec<Vec<u8>> = Vec::new();
     for (tuck, tabler, mat) in UI_ICONS {
         if system
             && let Some(names) = SYSTEM_UI.iter().find(|(n, _)| n == tuck).map(|(_, v)| *v)
             && let Some((bytes, ext)) = system_icon_file(names)
         {
-            let _ = std::fs::write(actions.join(format!("tuck-{tuck}-symbolic.{ext}")), bytes);
-            continue;
+            let is_view = matches!(*tuck, "grid" | "compact" | "details" | "columns");
+            if !(is_view && view_icons.contains(&bytes)) {
+                if is_view {
+                    view_icons.push(bytes.clone());
+                }
+                let _ = std::fs::write(actions.join(format!("tuck-{tuck}-symbolic.{ext}")), bytes);
+                continue;
+            }
         }
         let svg = if material { find(embedded::MATERIAL, mat) } else { find(embedded::TABLER, tabler) };
         if let Some(svg) = svg {

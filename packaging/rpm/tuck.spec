@@ -8,7 +8,7 @@ Summary:        Fast, friendly file manager
 # Tuck is GPL-3.0-or-later; bundled icons are MIT (Tabler) and Apache-2.0
 # (Material Symbols); vendored Rust crates are MIT/Apache-2.0/BSD/Zlib/Unicode.
 License:        GPL-3.0-or-later AND MIT AND Apache-2.0
-URL:            https://github.com/anuzdhk/kivo-filemanager
+URL:            https://github.com/anuzdhk/tuck-filemanager
 Source0:        %{name}-%{version}.tar.gz
 Source1:        %{name}-%{version}-vendor.tar.xz
 
@@ -28,6 +28,8 @@ Recommends:     gvfs
 Recommends:     git
 Recommends:     xdg-utils
 Suggests:       flatpak
+Suggests:       ImageMagick
+Suggests:       ffmpeg
 
 %description
 Tuck is a fast, friendly file manager: icons, compact and details views,

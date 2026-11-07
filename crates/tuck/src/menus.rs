@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Context menus. Common actions sit at the top level, never buried.
 
+use gtk::prelude::*;
 use gtk::{gio, glib};
 use tuck_core::paths::{UserDir, UserDirs};
 
@@ -13,6 +14,21 @@ pub struct Selection {
     pub in_trash: bool,
     /// Dolphin service-menu actions that apply.
     pub services: Vec<crate::services_ui::Entry>,
+    /// Apps for Open With: (desktop id, name), default first.
+    pub apps: Vec<(String, String)>,
+    /// Entries from addons: (label, action).
+    pub addon_items: Vec<(&'static str, &'static str)>,
+}
+
+/// Apps that open every file in `files`' content type: (id, name).
+pub fn apps_for(content_type: &str) -> Vec<(String, String)> {
+    let mut apps: Vec<gio::AppInfo> = gio::AppInfo::default_for_type(content_type, false).into_iter().collect();
+    for a in gio::AppInfo::recommended_for_type(content_type) {
+        if !apps.iter().any(|b| b.id() == a.id()) {
+            apps.push(a);
+        }
+    }
+    apps.into_iter().filter(|a| a.should_show()).filter_map(|a| Some((a.id()?.to_string(), a.display_name().to_string()))).take(8).collect()
 }
 
 /// Menu for right-clicking one or more items.
@@ -38,7 +54,19 @@ pub fn item_menu(sel: &Selection) -> gio::Menu {
         open.append(Some("Open in New _Tab"), Some("win.open-new-tab"));
     }
     if sel.has_file {
-        open.append(Some("Open _With…"), Some("win.open-with"));
+        // A submenu that opens beside the menu: the usual apps, then "Other".
+        let with = gio::Menu::new();
+        let apps = gio::Menu::new();
+        for (id, name) in &sel.apps {
+            let item = gio::MenuItem::new(Some(name), None);
+            item.set_action_and_target_value(Some("win.open-with-app"), Some(&glib::Variant::from(id.as_str())));
+            apps.append_item(&item);
+        }
+        with.append_section(None, &apps);
+        let other = gio::Menu::new();
+        other.append(Some("_Other Application…"), Some("win.open-with"));
+        with.append_section(None, &other);
+        open.append_submenu(Some("Open _With"), &with);
     }
     menu.append_section(None, &open);
 
@@ -56,6 +84,9 @@ pub fn item_menu(sel: &Selection) -> gio::Menu {
         manage.append(Some("E_xtract Here"), Some("win.extract"));
     }
     manage.append(Some("Co_mpress…"), Some("win.compress"));
+    for (label, action) in &sel.addon_items {
+        manage.append(Some(label), Some(action));
+    }
     manage.append(Some("_Duplicate"), Some("win.duplicate"));
     manage.append(Some("Create _Link"), Some("win.link"));
     manage.append(Some("_Move To…"), Some("win.move-to"));

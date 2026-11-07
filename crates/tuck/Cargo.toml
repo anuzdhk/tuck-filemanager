@@ -33,7 +33,7 @@ section = "utils"
 priority = "optional"
 depends = "$auto, libgtk-4-1 (>= 4.16), libadwaita-1-0 (>= 1.6)"
 recommends = "gvfs-backends, gvfs-fuse, git, xdg-utils"
-suggests = "flatpak, unrar"
+suggests = "flatpak, unrar, imagemagick, ffmpeg"
 assets = [
     ["target/release/tuck", "usr/bin/", "755"],
     ["../../data/desktop/io.github.anuzdhk.Tuck.desktop", "usr/share/applications/", "644"],

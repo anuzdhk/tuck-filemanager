@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Install the latest Tuck release:
 #
-#   curl -fsSL https://raw.githubusercontent.com/anuzdhk/kivo-filemanager/feat/strata/get.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/anuzdhk/tuck-filemanager/feat/strata/get.sh | sh
 #
 # Picks the package for your system (.deb, .rpm, Arch package, or the
 # AppImage), checks it against the release's SHA256SUMS, and installs it with
@@ -14,7 +14,7 @@
 #   --dry-run    show what would be downloaded and installed, then stop
 set -eu
 
-REPO=anuzdhk/kivo-filemanager
+REPO=anuzdhk/tuck-filemanager
 # TUCK_RELEASE_API and TUCK_OS_RELEASE are for testing this script.
 API="${TUCK_RELEASE_API:-https://api.github.com/repos/$REPO/releases/latest}"
 OS_RELEASE="${TUCK_OS_RELEASE:-/etc/os-release}"

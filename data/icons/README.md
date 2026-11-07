@@ -7,7 +7,7 @@
 - `material/`: [Material Symbols](https://github.com/google/material-design-icons)
   Rounded, Apache-2.0 (`LICENSES/material-symbols-Apache-2.0.txt`). Unmodified.
 
-Added since: Tabler `sparkles`, `columns-3` and `settings`; Material `cleaning_services`, `view_column`, `settings` and `mop`. The Cleaner uses Material's `mop` (a broom) in both styles, since Tabler has no broom; it is copied into `tabler-symbolic/` for that.
+Added since: Tabler `sparkles`, `columns-3`, `settings` and `puzzle`; Material `cleaning_services`, `view_column`, `settings`, `mop` and `extension`. The Cleaner uses Material's `mop` (a broom) in both styles, since Tabler has no broom; it is copied into `tabler-symbolic/` for that.
 
 Tuck's folder and document icons are original artwork generated in code
 (`crates/tuck-core/src/icons.rs`); emblems reuse the Tabler glyphs above.

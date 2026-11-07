@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Tuck — a fast, friendly file manager for Linux.
 
+mod addons_ui;
 mod appearance_ui;
 mod breadcrumb;
 mod cleaner_ui;

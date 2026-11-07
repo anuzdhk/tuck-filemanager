@@ -15,6 +15,8 @@ use tuck_core::format;
 
 use crate::item::{ATTRS, FileItem};
 
+pub type SetupList = Box<dyn Fn(&gtk::Widget, Option<gio::File>)>;
+
 /// What the pane lends the columns.
 pub struct Hooks {
     pub sorter: gtk::Sorter,
@@ -29,6 +31,8 @@ pub struct Hooks {
     pub setup_cell: Box<dyn Fn(&gtk::Widget)>,
     /// Tag a row widget with its item (right-click and drops find it).
     pub bind_cell: fn(&gtk::Widget, &FileItem),
+    /// Per-column setup (drop target; the folder is None for the first).
+    pub setup_list: SetupList,
 }
 
 struct Col {
@@ -138,6 +142,7 @@ impl Columns {
             Some(d) => format!("{} column", crate::pane::folder_title(d)),
             None => "First column".into(),
         })]);
+        (self.0.hooks.setup_list)(view.upcast_ref(), dir.clone());
         let scroll = gtk::ScrolledWindow::builder().child(&view).width_request(WIDTH).hscrollbar_policy(gtk::PolicyType::Never).vexpand(true).build();
         let frame = gtk::Box::new(gtk::Orientation::Horizontal, 0);
         frame.append(&scroll);

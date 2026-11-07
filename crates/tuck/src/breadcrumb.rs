@@ -75,6 +75,12 @@ impl Breadcrumb {
         self.0.scroller.hadjustment()
     }
 
+    /// The width the whole path wants (the scroll range can't tell once
+    /// the path fits: then it's just the visible width).
+    pub fn path_width(&self) -> f64 {
+        f64::from(self.0.crumbs.measure(gtk::Orientation::Horizontal, -1).1)
+    }
+
     pub fn connect_navigate(&self, f: impl Fn(gio::File) + 'static) {
         *self.0.on_navigate.borrow_mut() = Some(Rc::new(f));
     }
@@ -188,7 +194,12 @@ impl Breadcrumb {
         }
         // Keep the current folder visible on long paths.
         let adj = self.0.scroller.hadjustment();
-        glib::idle_add_local_once(move || adj.set_value(adj.upper()));
+        glib::idle_add_local_once(move || {
+            adj.set_value(adj.upper());
+            // A shorter path that fits leaves upper == page_size, so nothing
+            // would tell the header the path now has room to spare.
+            adj.emit_by_name::<()>("changed", &[]);
+        });
         self.0.stack.set_visible_child_name("crumbs");
     }
 

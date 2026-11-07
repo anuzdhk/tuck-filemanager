@@ -25,16 +25,16 @@
     </ul>
   </description>
   <launchable type="desktop-id">io.github.anuzdhk.Tuck.desktop</launchable>
-  <url type="homepage">https://github.com/anuzdhk/kivo-filemanager</url>
-  <url type="bugtracker">https://github.com/anuzdhk/kivo-filemanager/issues</url>
+  <url type="homepage">https://github.com/anuzdhk/tuck-filemanager</url>
+  <url type="bugtracker">https://github.com/anuzdhk/tuck-filemanager/issues</url>
   <screenshots>
     <screenshot type="default">
       <caption>Folders with the Information panel</caption>
-      <image>https://raw.githubusercontent.com/anuzdhk/kivo-filemanager/feat/strata/docs/screenshots/milestone-8/tags.png</image>
+      <image>https://raw.githubusercontent.com/anuzdhk/tuck-filemanager/feat/strata/docs/screenshots/milestone-8/tags.png</image>
     </screenshot>
     <screenshot>
       <caption>Themes in Preferences</caption>
-      <image>https://raw.githubusercontent.com/anuzdhk/kivo-filemanager/feat/strata/docs/screenshots/milestone-8/prefs-themes.png</image>
+      <image>https://raw.githubusercontent.com/anuzdhk/tuck-filemanager/feat/strata/docs/screenshots/milestone-8/prefs-themes.png</image>
     </screenshot>
   </screenshots>
   <provides>

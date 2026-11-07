@@ -23,6 +23,8 @@ pub enum Kind {
     Archive,
     /// Installers and app bundles (.deb, .rpm, .AppImage, .flatpakref, .exe…).
     Package,
+    /// 3D models (glTF, OBJ, STL, FBX).
+    Model,
     Unsupported,
 }
 
@@ -54,6 +56,9 @@ pub fn classify(path: &Path, mime: &str, is_dir: bool) -> Kind {
         || mime == "application/x-ms-dos-executable"
     {
         return Kind::Package;
+    }
+    if crate::model3d::is_model(path, mime) {
+        return Kind::Model;
     }
     if mime == "image/gif" {
         return Kind::Gif;

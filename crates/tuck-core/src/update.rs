@@ -20,7 +20,7 @@ use crate::install::OsFamily;
 use crate::ops::Cancel;
 
 /// GitHub repository the releases come from.
-pub const REPO: &str = "anuzdhk/kivo-filemanager";
+pub const REPO: &str = "anuzdhk/tuck-filemanager";
 
 pub const CURRENT: &str = env!("CARGO_PKG_VERSION");
 

@@ -28,6 +28,10 @@ struct Service {
     cache: HashMap<Key, gdk::Texture>,
     order: VecDeque<Key>,
     waiting: HashMap<Key, Vec<Waiter>>,
+    /// Gave nothing this session (an unreadable model, say): don't redo the
+    /// work each time the cell is shown again. Keyed with mtime, so an
+    /// edited file is tried again.
+    failed: std::collections::HashSet<Key>,
 }
 
 const CACHE_LIMIT: usize = 600;
@@ -73,6 +77,9 @@ fn start() -> Service {
                         // draw page 1 ourselves with Poppler.
                         _ if mime == "application/pdf" => crate::pdf::first_page_rgba(&key.0, key.2.pixels())
                             .and_then(|(w, h, px)| thumbs.store_rgba(&key.0, key.2, w, h, px).ok()),
+                        // 3D models: drawn by the model viewer addon.
+                        _ if tuck_core::model3d::is_model(&key.0, &mime) => tuck_core::model3d::thumbnail(&key.0, key.2.pixels())
+                            .and_then(|(w, h, px)| thumbs.store_rgba(&key.0, key.2, w, h, px).ok()),
                         _ => None,
                     };
                     if tx.send_blocking((key, out)).is_err() {
@@ -87,6 +94,9 @@ fn start() -> Service {
             let texture = path.and_then(|p| gdk::Texture::from_filename(&p).ok());
             let cbs = with(|s| {
                 let cbs = s.waiting.remove(&key).unwrap_or_default();
+                if texture.is_none() {
+                    s.failed.insert(key.clone());
+                }
                 if let Some(t) = &texture {
                     s.cache.insert(key.clone(), t.clone());
                     s.order.push_back(key.clone());
@@ -105,7 +115,7 @@ fn start() -> Service {
             }
         }
     });
-    Service { queue, can: HashMap::new(), checker: Thumbnails::new(), cache: HashMap::new(), order: VecDeque::new(), waiting: HashMap::new() }
+    Service { queue, can: HashMap::new(), checker: Thumbnails::new(), cache: HashMap::new(), order: VecDeque::new(), waiting: HashMap::new(), failed: Default::default() }
 }
 
 /// Can this type be thumbnailed at all? (Cached per MIME type.)
@@ -126,13 +136,17 @@ pub fn supported(mime: &str) -> bool {
 /// Ask for a thumbnail of `path` at least `px` pixels. `done` runs on the UI
 /// thread if one becomes available; it may run immediately from the cache.
 pub fn request(path: PathBuf, mtime: i64, mime: &str, px: u32, done: impl FnOnce(&gdk::Texture) + 'static) {
-    if !supported(mime) {
+    let model = tuck_core::model3d::is_model(&path, mime) && crate::addons_ui::enabled(tuck_core::addons::MODEL_VIEWER);
+    if !model && !supported(mime) {
         return;
     }
     let key = (path, mtime, Size::for_pixels(px));
-    let cached = with(|s| s.cache.get(&key).cloned());
+    let (cached, failed) = with(|s| (s.cache.get(&key).cloned(), s.failed.contains(&key)));
     if let Some(t) = cached {
         done(&t);
+        return;
+    }
+    if failed {
         return;
     }
     with(|s| {
