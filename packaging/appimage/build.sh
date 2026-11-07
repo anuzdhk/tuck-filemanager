@@ -25,8 +25,13 @@ QS_REV=1a5594c7f47ec5cb46ce70f6e11b5c5781f17f5f
 rm -rf "$WORK"
 mkdir -p "$WORK" "$OUT"
 cd "$WORK"
-wget -q -O quick-sharun "https://raw.githubusercontent.com/pkgforge-dev/Anylinux-AppImages/$QS_REV/useful-tools/quick-sharun.sh"
-chmod +x quick-sharun
+TOOLS="https://raw.githubusercontent.com/pkgforge-dev/Anylinux-AppImages/$QS_REV/useful-tools"
+wget -q -O quick-sharun "$TOOLS/quick-sharun.sh"
+wget -q -O get-debloated-pkgs "$TOOLS/get-debloated-pkgs.sh"
+chmod +x quick-sharun get-debloated-pkgs
+# Slimmed-down Mesa (no 165 MB LLVM), ICU and GTK from the same project:
+# keeps the AppImage near the old size while still bundling GPU drivers.
+./get-debloated-pkgs --add-common --prefer-nano
 
 export ICON=/usr/share/icons/hicolor/256x256/apps/io.github.anuzdhk.Tuck.png
 export DESKTOP=/usr/share/applications/io.github.anuzdhk.Tuck.desktop
