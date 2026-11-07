@@ -64,23 +64,7 @@ jobs:
 
   appimage:
     needs: versions
-    runs-on: ubuntu-latest
-    container: debian:trixie
-    steps:
-      - name: Install build dependencies
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends ca-certificates curl wget git file build-essential pkg-config \
-            libgtk-4-dev libadwaita-1-dev libgtksourceview-5-dev libpoppler-glib-dev libarchive-dev libvte-2.91-gtk4-dev \
-            librsvg2-common gdk-pixbuf2.0-bin
-      - uses: actions/checkout@v7
-      - name: Build the AppImage
-        run: |
-          curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal
-          . "$HOME/.cargo/env"
-          packaging/appimage/build.sh "$PWD/out"
-      - uses: actions/upload-artifact@v7
-        with: { name: appimage, path: out/*.AppImage }
+    uses: ./.github/workflows/appimage.yml
 
   arch:
     needs: versions
