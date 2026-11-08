@@ -9,7 +9,7 @@ use adw::prelude::*;
 use gtk::{gio, glib};
 use tuck_core::addons::{self, Addon};
 use tuck_core::format;
-use tuck_core::media::{self, ImageFormat, ImageOptions, VideoOptions, VideoQuality};
+use tuck_core::media::{self, AudioFormat, AudioOptions, ImageFormat, ImageOptions, VideoOptions, VideoQuality};
 
 use crate::theme_ui;
 use crate::window::Window;
@@ -22,7 +22,7 @@ pub fn enabled(id: &str) -> bool {
 pub fn page() -> adw::PreferencesPage {
     let page = adw::PreferencesPage::builder().title("Addons").name("addons").icon_name("tuck-addons-symbolic").build();
     let group = adw::PreferencesGroup::builder()
-        .description("Optional tools built into Tuck. Turn off the ones you don't use and they disappear from menus and previews.")
+        .description("Optional tools built into Tuck, all off at first. Turn on the ones you want; they appear in menus and previews.")
         .build();
     for a in addons::ALL {
         group.add(&row(a));
@@ -62,11 +62,14 @@ pub fn menu_items(paths: &[PathBuf], has_dir: bool) -> Vec<(&'static str, &'stat
     if enabled(addons::VIDEO_COMPRESSOR) && paths.iter().any(|p| media::is_video(p)) {
         out.push(("Compress _Video…", "win.compress-video"));
     }
+    if enabled(addons::AUDIO_CONVERTER) && (has_dir || paths.iter().any(|p| media::is_audio(p))) {
+        out.push(("Convert _Audio…", "win.convert-audio"));
+    }
     out
 }
 
 pub fn setup_actions(w: &Window) {
-    for (name, f) in [("convert-images", convert_images as fn(&Window)), ("compress-video", compress_video)] {
+    for (name, f) in [("convert-images", convert_images as fn(&Window)), ("compress-video", compress_video), ("convert-audio", convert_audio)] {
         let a = gio::SimpleAction::new(name, None);
         let weak = w.downgrade();
         a.connect_activate(move |_, _| {
@@ -145,6 +148,48 @@ fn convert_images(w: &Window) {
                 media::convert_images(prog, &files, &o, obs, cancel)
             },
             move |out| finished(&weak, out, "image", "Converted"),
+        );
+    });
+}
+
+const BITRATES: &[u32] = &[128, 192, 256, 320];
+
+fn convert_audio(w: &Window) {
+    let Some(paths) = w.selected_paths() else { return };
+    if program(w, addons::AUDIO_CONVERTER).is_none() {
+        return;
+    }
+    let fmt = combo("Format", &AudioFormat::ALL.iter().map(|f| f.label()).collect::<Vec<_>>(), 0);
+    let labels: Vec<String> = BITRATES.iter().map(|b| format!("{b} kbit/s")).collect();
+    let rate = combo("Quality", &labels.iter().map(String::as_str).collect::<Vec<_>>(), 2);
+    rate.set_subtitle("Higher sounds better and makes bigger files");
+    {
+        let r = rate.clone();
+        fmt.connect_selected_notify(move |f| r.set_visible(AudioFormat::ALL[f.selected() as usize].lossy()));
+    }
+    let what = if paths.iter().any(|p| p.is_dir()) { "Every audio file in the selected folders is included. " } else { "" };
+    let d = adw::AlertDialog::new(Some("Convert Audio"), Some(&format!("{what}New files are saved next to the originals, which stay as they are. Tags and cover art are kept.")));
+    d.set_extra_child(Some(&boxed(&[fmt.upcast_ref(), rate.upcast_ref()])));
+    d.add_responses(&[("cancel", "_Cancel"), ("ok", "_Convert")]);
+    d.set_response_appearance("ok", adw::ResponseAppearance::Suggested);
+    d.set_default_response(Some("ok"));
+    d.set_close_response("cancel");
+    let weak = w.downgrade();
+    glib::MainContext::default().spawn_local(async move {
+        let Some(w) = Window::from_weak(&weak) else { return };
+        if d.choose_future(Some(&w.parent_widget())).await != "ok" {
+            return;
+        }
+        let o = AudioOptions { format: AudioFormat::ALL[fmt.selected() as usize], bitrate: BITRATES[rate.selected() as usize] };
+        let weak = w.downgrade();
+        w.jobs().run(
+            &w.parent_widget(),
+            &format!("Converting to {}", o.format.label()),
+            move |obs, cancel| {
+                let files = media::collect(&paths, media::is_audio);
+                media::convert_audio(&files, &o, obs, cancel)
+            },
+            move |out| finished(&weak, out, "audio file", "Converted"),
         );
     });
 }

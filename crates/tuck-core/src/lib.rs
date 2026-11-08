@@ -23,6 +23,7 @@ pub mod names;
 pub mod ops;
 pub mod paths;
 pub mod perms;
+pub mod portal;
 pub mod preview;
 pub mod search;
 pub mod servicemenu;

@@ -236,6 +236,11 @@ impl Window {
     /// Open files with their default app (or ask which app). Archives are
     /// extracted instead, like a double-click on macOS.
     pub(crate) fn open_files(&self, files: Vec<FileItem>, choose_app: bool) {
+        // In a file picker, opening a file picks it.
+        if let Some(pk) = self.picker() {
+            pk.activated(self, files);
+            return;
+        }
         let window = self.gtk_window();
         for item in files {
             if !choose_app && let Some(p) = item.path() {

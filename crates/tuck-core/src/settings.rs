@@ -232,7 +232,7 @@ impl Default for AppSettings {
             density: Density::Comfortable,
             reduce_motion: false,
             shortcuts: Default::default(),
-            check_updates: false,
+            check_updates: true,
             last_update_check: 0,
             sidebar_width: 240.0,
             sidebar_collapsed: Vec::new(),

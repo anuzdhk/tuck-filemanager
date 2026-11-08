@@ -304,6 +304,11 @@ pub fn parse_duration(line: &str) -> Option<f64> {
 
 /// Compress `files` one after another (FFmpeg already uses every core).
 pub fn compress_videos(files: &[PathBuf], o: &VideoOptions, obs: &mut dyn Observer, cancel: &Cancel) -> Outcome {
+    ffmpeg_each(files, "mp4", &|i, out| video_args(i, out, o), obs, cancel)
+}
+
+/// Run FFmpeg on each file, writing `<name>.<ext>` beside it.
+fn ffmpeg_each(files: &[PathBuf], ext: &str, args: &dyn Fn(&Path, &Path) -> Vec<OsString>, obs: &mut dyn Observer, cancel: &Cancel) -> Outcome {
     let sizes: Vec<u64> = files.iter().map(|f| std::fs::metadata(f).map(|m| m.len()).unwrap_or(0)).collect();
     let total: u64 = sizes.iter().sum();
     let mut before_this = 0u64;
@@ -312,7 +317,7 @@ pub fn compress_videos(files: &[PathBuf], o: &VideoOptions, obs: &mut dyn Observ
         if cancel.is_cancelled() {
             break;
         }
-        let output = output_for(f, "mp4", &|_| false);
+        let output = output_for(f, ext, &|_| false);
         let size = sizes[i];
         let mut report = |frac: f64| {
             obs.progress(&Progress {
@@ -324,7 +329,7 @@ pub fn compress_videos(files: &[PathBuf], o: &VideoOptions, obs: &mut dyn Observ
             })
         };
         report(0.0);
-        let r = run_ffmpeg(&video_args(f, &output, o), cancel, &mut report);
+        let r = run_ffmpeg(&args(f, &output), cancel, &mut report);
         if r.is_err() {
             let _ = std::fs::remove_file(&output);
         }
@@ -333,6 +338,104 @@ pub fn compress_videos(files: &[PathBuf], o: &VideoOptions, obs: &mut dyn Observ
     }
     out.cancelled = cancel.is_cancelled();
     out
+}
+
+// ------------------------------------------------------------------- audio
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudioFormat {
+    Mp3,
+    AacM4a,
+    AlacM4a,
+    Flac,
+    Opus,
+    Wav,
+}
+
+impl AudioFormat {
+    pub const ALL: [AudioFormat; 6] = [Self::Mp3, Self::AacM4a, Self::AlacM4a, Self::Flac, Self::Opus, Self::Wav];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Mp3 => "MP3",
+            Self::AacM4a => "M4A (AAC)",
+            Self::AlacM4a => "M4A (Apple Lossless)",
+            Self::Flac => "FLAC",
+            Self::Opus => "Opus",
+            Self::Wav => "WAV",
+        }
+    }
+
+    pub fn ext(self) -> &'static str {
+        match self {
+            Self::Mp3 => "mp3",
+            Self::AacM4a | Self::AlacM4a => "m4a",
+            Self::Flac => "flac",
+            Self::Opus => "opus",
+            Self::Wav => "wav",
+        }
+    }
+
+    /// Lossy formats take a bitrate.
+    pub fn lossy(self) -> bool {
+        matches!(self, Self::Mp3 | Self::AacM4a | Self::Opus)
+    }
+
+    fn codec(self) -> &'static str {
+        match self {
+            Self::Mp3 => "libmp3lame",
+            Self::AacM4a => "aac",
+            Self::AlacM4a => "alac",
+            Self::Flac => "flac",
+            Self::Opus => "libopus",
+            Self::Wav => "pcm_s16le",
+        }
+    }
+
+    /// Can hold cover art (copied from the original).
+    fn cover(self) -> bool {
+        matches!(self, Self::Mp3 | Self::AacM4a | Self::AlacM4a | Self::Flac)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AudioOptions {
+    pub format: AudioFormat,
+    /// kbit/s, for lossy formats.
+    pub bitrate: u32,
+}
+
+pub const AUDIO_EXTS: &[&str] = &["mp3", "m4a", "aac", "flac", "alac", "ogg", "oga", "opus", "wav", "aif", "aiff", "wma", "ape", "wv", "mka"];
+
+pub fn is_audio(p: &Path) -> bool {
+    AUDIO_EXTS.contains(&ext_of(p).as_str())
+}
+
+/// FFmpeg arguments: the first audio stream, tags kept, cover art copied
+/// where the format can hold it.
+pub fn audio_args(input: &Path, output: &Path, o: &AudioOptions) -> Vec<OsString> {
+    let mut a: Vec<OsString> = ["-hide_banner", "-nostdin", "-y", "-i"].map(OsString::from).to_vec();
+    a.push(input.into());
+    let mut push = |s: &[&str]| a.extend(s.iter().map(OsString::from));
+    push(&["-map", "0:a:0", "-map_metadata", "0"]);
+    if o.format.cover() && is_audio(input) {
+        // Cover art is a still "video" stream in audio files; `?` = if any.
+        push(&["-map", "0:v:0?", "-c:v", "copy", "-disposition:v:0", "attached_pic"]);
+    } else {
+        push(&["-vn"]);
+    }
+    push(&["-c:a", o.format.codec()]);
+    if o.format.lossy() {
+        a.extend(["-b:a".into(), format!("{}k", o.bitrate.clamp(32, 512)).into()]);
+    }
+    a.extend(["-progress", "pipe:1", "-nostats"].map(OsString::from));
+    a.push(output.into());
+    a
+}
+
+/// Convert audio files one after another.
+pub fn convert_audio(files: &[PathBuf], o: &AudioOptions, obs: &mut dyn Observer, cancel: &Cancel) -> Outcome {
+    ffmpeg_each(files, o.format.ext(), &|i, out| audio_args(i, out, o), obs, cancel)
 }
 
 /// Run FFmpeg, reporting the fraction done from its `-progress` output.
@@ -445,6 +548,24 @@ mod tests {
         assert_eq!(parse_duration("  Duration: 00:01:02.50, start: 0.000000, bitrate: 1 kb/s"), Some(62.5));
         assert_eq!(parse_duration("  Duration: N/A, bitrate: N/A"), None);
         assert_eq!(parse_duration("Stream #0:0"), None);
+    }
+
+    #[test]
+    fn audio_arguments() {
+        let s = |v: Vec<OsString>| v.iter().map(|s| s.to_string_lossy().into_owned()).collect::<Vec<_>>();
+        let o = AudioOptions { format: AudioFormat::Mp3, bitrate: 192 };
+        let a = s(audio_args(Path::new("/m/a.flac"), Path::new("/m/a.mp3"), &o));
+        assert!(a.windows(2).any(|w| w == ["-c:a", "libmp3lame"]) && a.windows(2).any(|w| w == ["-b:a", "192k"]));
+        assert!(a.windows(2).any(|w| w == ["-map", "0:v:0?"]), "cover art kept");
+        assert_eq!(a.last().unwrap(), "/m/a.mp3");
+        // Lossless: no bitrate. Opus: no cover. A video's picture is never copied.
+        let a = s(audio_args(Path::new("/m/a.m4a"), Path::new("/m/a.flac"), &AudioOptions { format: AudioFormat::Flac, bitrate: 192 }));
+        assert!(!a.iter().any(|x| x == "-b:a"));
+        let a = s(audio_args(Path::new("/m/a.flac"), Path::new("/m/a.opus"), &AudioOptions { format: AudioFormat::Opus, bitrate: 128 }));
+        assert!(a.iter().any(|x| x == "-vn"));
+        let a = s(audio_args(Path::new("/m/clip.mp4"), Path::new("/m/clip.m4a"), &AudioOptions { format: AudioFormat::AacM4a, bitrate: 256 }));
+        assert!(a.iter().any(|x| x == "-vn"));
+        assert!(is_audio(Path::new("x.FLAC")) && !is_audio(Path::new("x.mp4")));
     }
 
     /// Real conversion when ImageMagick is installed.

@@ -59,6 +59,7 @@ Grab the file for your system from the [latest release](https://github.com/anuzd
 ### After installing
 
 - **Make Tuck your file manager:** Preferences › Updates › **Make Default**. Folders from your browser, desktop and other apps then open in Tuck.
+- **Pick files with Tuck:** Preferences › Updates › **Pick Files With Tuck** makes the Open and Save dialogs of other apps Tuck windows (through the desktop's file chooser portal; needs the .deb, .rpm or Arch package).
 - **Stay up to date:** Preferences › Updates › **Check Now** (or turn on **Check Automatically**). Tuck downloads the right package, verifies it, and installs it when you say so.
 - **Uninstall:** remove it the way you installed it, e.g. `sudo apt remove tuck`, `sudo dnf remove tuck`, `sudo pacman -R tuck`, or delete `~/Applications/Tuck.AppImage`.
 
@@ -68,7 +69,7 @@ Grab the file for your system from the [latest release](https://github.com/anuzd
 
 **Browse your way**
 - Icons, compact, details and **column** views (macOS-style columns that build up as you go deeper, Ctrl+4), tabs, and split view (F3)
-- A folder tree (F7), a built-in terminal that follows you (F4), and an Information panel (F11)
+- A folder tree (F7), a built-in terminal that follows you (F4; drop files on it to type their paths), and an Information panel (F11)
 - Live updates, type-ahead, a filter bar, selection mode, per-folder view settings, and session restore
 
 **Find things fast**
@@ -92,9 +93,10 @@ Grab the file for your system from the [latest release](https://github.com/anuzd
 - **Cleaner**: free space by clearing caches that are safe to delete (previews, browser and package caches); it never touches your files, and skips a browser's cache while it's open
 - See how full each drive is right in the sidebar, with details in Preferences › Storage
 
-**Addons** (each can be turned off in Preferences › Addons)
+**Addons** (off at first: turn on the ones you want in Preferences › Addons)
 - **Image Converter:** right-click images, or a whole folder, › Convert Images to WebP, AVIF, JPEG or PNG with a quality slider and optional resize. Uses ImageMagick.
 - **Video Compressor:** right-click › Compress Video with simple presets (High quality, Balanced, Smallest file) and an optional resolution limit. Uses FFmpeg.
+- **Audio Converter:** right-click music, or a folder of it, › Convert Audio to MP3, M4A (AAC or Apple Lossless), FLAC, Opus or WAV, keeping tags and cover art. Uses FFmpeg.
 - **3D Model Viewer:** thumbnails and Quick Look for GLB, glTF, OBJ, STL and binary FBX models. Drag to turn the model. Built in, nothing to install.
 
 **Make it yours**
@@ -253,6 +255,12 @@ Tuck is free and made in spare time. If it saves you time, you can buy me a coff
 [![Support Tuck on Ko-fi](https://img.shields.io/badge/Ko--fi-Buy%20me%20a%20coffee-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/anujdhakal)
 
 Starring the repository, reporting bugs and telling a friend help too.
+
+### Supporters
+
+Thank you to everyone who has helped Tuck grow:
+
+- [Rawi Rai](https://www.reddit.com/user/rawirai/) (u/rawirai), from Dharan, Nepal, for early feedback and feature ideas from r/technepal
 
 ## Credits and license
 

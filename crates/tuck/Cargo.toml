@@ -38,6 +38,8 @@ assets = [
     ["target/release/tuck", "usr/bin/", "755"],
     ["../../data/desktop/io.github.anuzdhk.Tuck.desktop", "usr/share/applications/", "644"],
     ["../../data/desktop/io.github.anuzdhk.Tuck.metainfo.xml", "usr/share/metainfo/", "644"],
+    ["../../data/portal/tuck.portal", "usr/share/xdg-desktop-portal/portals/", "644"],
+    ["../../data/portal/org.freedesktop.impl.portal.desktop.tuck.service", "usr/share/dbus-1/services/", "644"],
     ["../../data/icons/app/io.github.anuzdhk.Tuck.svg", "usr/share/icons/hicolor/scalable/apps/", "644"],
     ["../../data/icons/app/hicolor/16x16/apps/io.github.anuzdhk.Tuck.png", "usr/share/icons/hicolor/16x16/apps/", "644"],
     ["../../data/icons/app/hicolor/24x24/apps/io.github.anuzdhk.Tuck.png", "usr/share/icons/hicolor/24x24/apps/", "644"],

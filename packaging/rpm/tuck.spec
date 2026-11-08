@@ -2,7 +2,7 @@
 # Fedora and openSUSE. Builds offline from the source tarball plus a
 # vendored-crates tarball; packaging/rpm/make-sources.sh creates both.
 Name:           tuck
-Version:        0.1.4
+Version:        0.1.5
 Release:        1%{?dist}
 Summary:        Fast, friendly file manager
 # Tuck is GPL-3.0-or-later; bundled icons are MIT (Tabler) and Apache-2.0
@@ -67,9 +67,14 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/io.github.anuzdhk.Tuc
 %{_bindir}/tuck
 %{_datadir}/applications/io.github.anuzdhk.Tuck.desktop
 %{_datadir}/metainfo/io.github.anuzdhk.Tuck.metainfo.xml
+%{_datadir}/xdg-desktop-portal/portals/tuck.portal
+%{_datadir}/dbus-1/services/org.freedesktop.impl.portal.desktop.tuck.service
 %{_datadir}/icons/hicolor/*/apps/io.github.anuzdhk.Tuck.*
 
 %changelog
+* Sun Nov 08 2026 anuzdhk <95576641+anuzdhk@users.noreply.github.com> - 0.1.5-1
+- Pick files with Tuck in other apps, Audio Converter addon, update notifications, drag-and-drop fixes
+
 * Sat Nov 07 2026 anuzdhk <95576641+anuzdhk@users.noreply.github.com> - 0.1.4-1
 - Addons (image converter, video compressor, 3D model viewer), compact search results, column drag and drop, and an AppImage that runs on older systems
 

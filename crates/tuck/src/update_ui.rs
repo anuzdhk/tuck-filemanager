@@ -68,6 +68,14 @@ pub fn startup_check(win: &crate::window::Window) {
     check_async(move |r| {
         let (Some(w), Ok(rel)) = (crate::window::Window::from_weak(&weak), r) else { return };
         if update::is_newer(&rel.tag, update::CURRENT) {
+            // A desktop notification too: the window may be in the background.
+            if let Some(app) = w.gtk_window().application() {
+                let n = gtk::gio::Notification::new(&format!("Tuck {} is available", rel.version()));
+                n.set_body(Some("Open Preferences › Updates to install it."));
+                n.set_default_action("app.updates");
+                n.add_button("Update", "app.updates");
+                app.send_notification(Some("update"), &n);
+            }
             let gw = w.gtk_window();
             w.toast_with_button(&format!("Tuck {} is available", rel.version()), "Details", move || {
                 crate::prefs::show_page(Some(gw.upcast_ref()), Some("updates"));
@@ -130,7 +138,42 @@ fn default_fm_group() -> adw::PreferencesGroup {
         }
         sync();
     });
+    group.add(&picker_row());
     group
+}
+
+/// "Pick Files With Tuck": other apps' Open and Save dialogs become Tuck
+/// windows (the portal backend, see `crate::portal`).
+fn picker_row() -> adw::SwitchRow {
+    use tuck_core::portal;
+    let row = adw::SwitchRow::builder().title("Pick Files With Tuck").subtitle_lines(0).build();
+    if !portal::installed() {
+        row.set_subtitle("Open and Save dialogs in other apps can be Tuck windows. Needs Tuck installed from a package (.deb, .rpm, Arch), not the AppImage.");
+        row.set_sensitive(false);
+        return row;
+    }
+    row.set_subtitle("Open and Save dialogs in other apps become Tuck windows. Apps already open pick it up once restarted.");
+    row.set_active(portal::is_enabled());
+    row.connect_active_notify(|r| {
+        let on = r.is_active();
+        if on == portal::is_enabled() {
+            return;
+        }
+        match portal::set_enabled(on) {
+            // The portal reads its config at start: restart it (the desktop
+            // starts it again on the next request).
+            Ok(_) => {
+                let _ = gtk::gio::Subprocess::newv(&["systemctl".as_ref(), "--user".as_ref(), "try-restart".as_ref(), "xdg-desktop-portal.service".as_ref()], gtk::gio::SubprocessFlags::NONE);
+            }
+            Err(e) => {
+                if let Some(d) = r.ancestor(adw::PreferencesDialog::static_type()).and_downcast::<adw::PreferencesDialog>() {
+                    d.add_toast(adw::Toast::new(&format!("Couldn't change the file picker: {e}")));
+                }
+                r.set_active(!on);
+            }
+        }
+    });
+    row
 }
 
 /// The Updates page of Preferences.

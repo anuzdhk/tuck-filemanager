@@ -1125,6 +1125,32 @@ impl Pane {
             self.0.details.clone().upcast(),
         ] {
             self.setup_drop_target(&view, None);
+            // GTK's drag source waits 100 ms before a drag can start, but
+            // the rubber band starts at once: a quick press-and-drag on a
+            // file became a rubber band. So, like Nautilus, the rubber band
+            // only starts on empty space.
+            let press = gtk::GestureClick::builder().button(gdk::BUTTON_PRIMARY).propagation_phase(gtk::PropagationPhase::Capture).build();
+            let v = view.downgrade();
+            press.connect_pressed(move |_, _, x, y| {
+                if let Some(v) = v.upgrade() {
+                    set_rubberband(&v, item_at(&v, x, y).is_none());
+                }
+            });
+            // Back on as soon as this press is over (or turned into a drag),
+            // so the next press on empty space can rubber-band.
+            let v = view.downgrade();
+            press.connect_stopped(move |_| {
+                if let Some(v) = v.upgrade() {
+                    set_rubberband(&v, true);
+                }
+            });
+            let v = view.downgrade();
+            press.connect_released(move |_, _, _, _| {
+                if let Some(v) = v.upgrade() {
+                    set_rubberband(&v, true);
+                }
+            });
+            view.add_controller(press);
         }
 
         // Pane becomes active on focus or click.
@@ -1988,6 +2014,14 @@ fn item_at(widget: &gtk::Widget, x: f64, y: f64) -> Option<(FileItem, gtk::Widge
             return None;
         }
         w = w.parent()?;
+    }
+}
+
+fn set_rubberband(view: &gtk::Widget, on: bool) {
+    if let Some(g) = view.downcast_ref::<gtk::GridView>() {
+        g.set_enable_rubberband(on);
+    } else if let Some(c) = view.downcast_ref::<gtk::ColumnView>() {
+        c.set_enable_rubberband(on);
     }
 }
 

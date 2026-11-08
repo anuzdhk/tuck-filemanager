@@ -55,6 +55,11 @@
   </supports>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.1.5" date="2026-11-08">
+      <description>
+        <p>Pick files with Tuck in other apps, Audio Converter addon, update notifications, drag-and-drop fixes</p>
+      </description>
+    </release>
     <release version="0.1.4" date="2026-11-07">
       <description>
         <p>Addons (image converter, video compressor, 3D model viewer), compact search results, column drag and drop, and an AppImage that runs on older systems</p>

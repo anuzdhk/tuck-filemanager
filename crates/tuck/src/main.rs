@@ -12,6 +12,8 @@ mod jobs;
 mod menus;
 mod ops_ui;
 mod pdf;
+mod picker;
+mod portal;
 mod properties;
 mod quicklook;
 mod search_ui;
@@ -110,9 +112,11 @@ pub const VIEW_SHORTCUTS: &[(&str, &[&str], &str, &str)] = &[
 fn main() -> glib::ExitCode {
     // Settings from when the app was called Kivo.
     tuck_core::paths::migrate_old_name();
+    // `tuck --portal`: other apps' file picker (started by D-Bus).
+    let portal = std::env::args().any(|a| a == "--portal");
     let app = adw::Application::builder()
-        .application_id(APP_ID)
-        .flags(if std::env::var_os("TUCK_ACTIONS").is_some() || std::env::var_os("TUCK_SCREENSHOT").is_some() {
+        .application_id(if portal { "io.github.anuzdhk.Tuck.Portal" } else { APP_ID })
+        .flags(if portal || std::env::var_os("TUCK_ACTIONS").is_some() || std::env::var_os("TUCK_SCREENSHOT").is_some() {
             // Scripted test runs get their own instance instead of handing
             // their work to a Tuck the user already has open.
             gio::ApplicationFlags::HANDLES_OPEN | gio::ApplicationFlags::NON_UNIQUE
@@ -131,6 +135,7 @@ fn main() -> glib::ExitCode {
 
     // Command line: `tuck [--new-window] [FOLDER|URI…]`, `tuck --version`.
     app.add_main_option("new-window", glib::Char::from(b'w'), glib::OptionFlags::NONE, glib::OptionArg::None, "Open a new window", None);
+    app.add_main_option("portal", glib::Char::from(b'p'), glib::OptionFlags::HIDDEN, glib::OptionArg::None, "Serve other apps' file dialogs (started by D-Bus)", None);
     app.add_main_option("version", glib::Char::from(b'v'), glib::OptionFlags::NONE, glib::OptionArg::None, "Show the version and exit", None);
     app.connect_handle_local_options(|_, opts| {
         if opts.contains("version") {
@@ -163,6 +168,17 @@ fn main() -> glib::ExitCode {
         let a = app.clone();
         prefs.connect_activate(move |_, _| prefs::show(a.active_window().as_ref()));
         app.add_action(&prefs);
+        // Opened from the "update available" notification.
+        let updates = gio::SimpleAction::new("updates", None);
+        let a = app.clone();
+        updates.connect_activate(move |_, _| {
+            let w = a.active_window().or_else(|| a.windows().into_iter().next());
+            if let Some(w) = &w {
+                w.present();
+            }
+            prefs::show_page(w.as_ref(), Some("updates"));
+        });
+        app.add_action(&updates);
         let shortcuts = gio::SimpleAction::new("shortcuts", None);
         let a = app.clone();
         shortcuts.connect_activate(move |_, _| show_shortcuts(a.active_window().as_ref()));
@@ -181,6 +197,10 @@ fn main() -> glib::ExitCode {
 
     let fv = folder_views.clone();
     app.connect_activate(move |app| {
+        if portal {
+            portal::start(app, fv.clone());
+            return;
+        }
         let w = window::Window::new(app, fv.clone());
         let session: Session = load_json(&session_file());
         if !w.restore_session(&session) {

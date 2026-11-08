@@ -543,3 +543,4 @@ listview.column-list > row:selected {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-bg-color) 30%, transparent);
   color: inherit;
 }
+.picker-bar { padding: 8px 12px; }

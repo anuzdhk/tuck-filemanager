@@ -64,6 +64,20 @@ impl TerminalPanel {
     }
 
     fn wire(&self) {
+        // Dropped files type their quoted paths, like other terminals.
+        let drop = gtk::DropTarget::new(gtk::gdk::FileList::static_type(), gtk::gdk::DragAction::COPY);
+        let t = self.0.term.downgrade();
+        drop.connect_drop(move |_, value, _, _| {
+            let (Some(t), Ok(list)) = (t.upgrade(), value.get::<gtk::gdk::FileList>()) else { return false };
+            let paths: Vec<String> = list.files().iter().filter_map(|f| f.path()).map(|p| shell_quote(&p)).collect();
+            if paths.is_empty() {
+                return false;
+            }
+            t.feed_child(format!("{} ", paths.join(" ")).as_bytes());
+            t.grab_focus();
+            true
+        });
+        self.0.term.add_controller(drop);
         let weak = Rc::downgrade(&self.0);
         self.0.term.connect_child_exited(move |_, _| {
             if let Some(i) = weak.upgrade() {

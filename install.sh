@@ -100,6 +100,11 @@ if [ "$PREFIX" != /usr ]; then
     # program it can't find: point the menu entry at the exact binary.
     sed -i "s|^Exec=tuck |Exec=\"$PREFIX/bin/tuck\" |" "$SHARE/applications/$APP_ID.desktop"
 fi
+# File picker for other apps (xdg-desktop-portal backend, off until chosen
+# in Preferences).
+put 0644 "$HERE/data/portal/tuck.portal" "$SHARE/xdg-desktop-portal/portals/tuck.portal"
+put 0644 "$HERE/data/portal/org.freedesktop.impl.portal.desktop.tuck.service" "$SHARE/dbus-1/services/org.freedesktop.impl.portal.desktop.tuck.service"
+sed -i "s|^Exec=.*|Exec=$PREFIX/bin/tuck --portal|" "$SHARE/dbus-1/services/org.freedesktop.impl.portal.desktop.tuck.service"
 put 0644 "$HERE/data/desktop/$APP_ID.metainfo.xml" "$SHARE/metainfo/$APP_ID.metainfo.xml"
 put 0644 "$HERE/data/icons/app/$APP_ID.svg" "$SHARE/icons/hicolor/scalable/apps/$APP_ID.svg"
 for size in 16 24 32 48 64 128 256 512; do

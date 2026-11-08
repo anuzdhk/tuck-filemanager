@@ -71,6 +71,9 @@ pub struct Inner {
     search: crate::searchbar::SearchBar,
     search_gen: Cell<u64>,
     search_cancel: RefCell<tuck_core::ops::Cancel>,
+    /// Set when this window is a file picker for another app.
+    picker: RefCell<Option<Rc<crate::picker::Picker>>>,
+    picker_bar: gtk::Revealer,
 }
 
 #[derive(Clone)]
@@ -308,6 +311,8 @@ impl Window {
         bar.pack_end(&done);
         let select_bar = gtk::Revealer::builder().child(&bar).transition_type(gtk::RevealerTransitionType::SlideUp).build();
         content_tv.add_bottom_bar(&select_bar);
+        let picker_bar = gtk::Revealer::new();
+        content_tv.add_bottom_bar(&picker_bar);
 
         // Drag the sidebar's right edge to resize it.
         let sidebar_box = gtk::Overlay::builder().child(&sidebar_tv).build();
@@ -388,6 +393,8 @@ impl Window {
             search,
             search_gen: Cell::new(0),
             search_cancel: RefCell::new(tuck_core::ops::Cancel::new()),
+            picker: RefCell::new(None),
+            picker_bar,
         }));
         // Dropping files on a tab puts them in that tab's folder.
         let weak = win.downgrade();
@@ -841,6 +848,17 @@ impl Window {
         self.0.tabs.borrow().iter().find(|t| t.page == page).cloned()
     }
 
+    pub(crate) fn picker(&self) -> Option<Rc<crate::picker::Picker>> {
+        self.0.picker.borrow().clone()
+    }
+
+    /// Turn this window into a file picker with `bar` along the bottom.
+    pub(crate) fn set_picker(&self, picker: Rc<crate::picker::Picker>, bar: &gtk::Widget) {
+        *self.0.picker.borrow_mut() = Some(picker);
+        self.0.picker_bar.set_child(Some(bar));
+        self.0.picker_bar.set_reveal_child(true);
+    }
+
     pub fn active_pane(&self) -> Option<Pane> {
         self.current_tab().map(|t| t.active())
     }
@@ -1035,6 +1053,10 @@ impl Window {
     }
 
     fn sync_selection_bar(&self) {
+        let picker = self.picker();
+        if let Some(pk) = picker {
+            pk.sync(self);
+        }
         let Some(p) = self.active_pane() else { return };
         self.0.select_bar.set_reveal_child(p.selection_mode());
         let n = p.selected_items().len();
@@ -1405,7 +1427,12 @@ impl Window {
                 });
                 return glib::Propagation::Stop;
             }
-            w.save_session();
+            // A picker answers "cancelled" and leaves the session alone.
+            let picker = w.picker();
+            match picker {
+                Some(pk) => pk.cancel(),
+                None => w.save_session(),
+            }
             WINDOWS.with(|list| list.borrow_mut().retain(|x| !Rc::ptr_eq(&x.0, &w.0)));
             glib::Propagation::Proceed
         });

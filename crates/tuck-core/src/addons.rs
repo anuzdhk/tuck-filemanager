@@ -2,7 +2,7 @@
 //! Addons: optional features that can be turned off in Preferences. Each is
 //! listed once in [`ALL`]; its switch lives in `AppSettings::addons` (absent
 //! means the addon's default). To add one: a new entry here, then check
-//! [`enabled`] wherever the feature shows up in the UI.
+//! [`enabled`] wherever the feature shows up in the UI. All start off.
 
 use crate::settings::AppSettings;
 
@@ -22,6 +22,7 @@ pub struct Addon {
 pub const IMAGE_CONVERTER: &str = "image-converter";
 pub const VIDEO_COMPRESSOR: &str = "video-compressor";
 pub const MODEL_VIEWER: &str = "model-viewer";
+pub const AUDIO_CONVERTER: &str = "audio-converter";
 
 pub const ALL: &[Addon] = &[
     Addon {
@@ -30,7 +31,7 @@ pub const ALL: &[Addon] = &[
         summary: "Convert and compress images, or every image in a folder, to WebP, AVIF, JPEG or PNG. Right-click → Convert Images…",
         needs: &[&["magick", "convert"]],
         install_hint: "Install ImageMagick (the “imagemagick” package).",
-        default_on: true,
+        default_on: false,
     },
     Addon {
         id: VIDEO_COMPRESSOR,
@@ -38,7 +39,15 @@ pub const ALL: &[Addon] = &[
         summary: "Shrink videos with simple presets, no extra app needed. Right-click → Compress Video…",
         needs: &[&["ffmpeg"]],
         install_hint: "Install FFmpeg (the “ffmpeg” package).",
-        default_on: true,
+        default_on: false,
+    },
+    Addon {
+        id: AUDIO_CONVERTER,
+        name: "Audio Converter",
+        summary: "Convert music to MP3, M4A (AAC or Apple Lossless), FLAC, Opus or WAV, keeping tags and cover art. Right-click → Convert Audio…",
+        needs: &[&["ffmpeg"]],
+        install_hint: "Install FFmpeg (the “ffmpeg” package).",
+        default_on: false,
     },
     Addon {
         id: MODEL_VIEWER,
@@ -46,7 +55,7 @@ pub const ALL: &[Addon] = &[
         summary: "Thumbnails and Quick Look for GLB, glTF, OBJ, STL and FBX models. Drag to turn the model.",
         needs: &[],
         install_hint: "",
-        default_on: true,
+        default_on: false,
     },
 ];
 
@@ -72,9 +81,10 @@ mod tests {
     #[test]
     fn defaults_and_overrides() {
         let mut s = AppSettings::default();
+        // Every addon starts off; the user turns on what they want.
+        assert!(ALL.iter().all(|a| !enabled(&s, a.id)));
+        s.addons.insert(MODEL_VIEWER.into(), true);
         assert!(enabled(&s, MODEL_VIEWER));
-        s.addons.insert(MODEL_VIEWER.into(), false);
-        assert!(!enabled(&s, MODEL_VIEWER));
         assert!(!enabled(&s, "no-such-addon"));
         // Ids are unique (they're settings keys).
         for (i, a) in ALL.iter().enumerate() {
